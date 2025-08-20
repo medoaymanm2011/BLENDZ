@@ -54,7 +54,7 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
               fill
               sizes="(max-width: 640px) 80vw, (max-width: 1024px) 40vw, 25vw"
               className={`object-cover transition-opacity duration-300 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
-              onLoadingComplete={() => setImgLoaded(true)}
+              onLoad={() => setImgLoaded(true)}
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center text-7xl">{product.images?.[0] ?? '🧸'}</div>

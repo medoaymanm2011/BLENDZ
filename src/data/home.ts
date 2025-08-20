@@ -82,3 +82,16 @@ export function getRandomHeroSlides(count = 5): HeroSlide[] {
     buttonKey: `hero.slide${(idx % 3) + 1}.button`,
   }));
 }
+
+// Deterministic default slides: take first N images in a fixed order
+export function getDefaultHeroSlides(count = 5): HeroSlide[] {
+  const pool = ALL_IMAGES.slice(0, Math.min(count, ALL_IMAGES.length));
+  return pool.map((image, idx) => ({
+    id: idx + 1,
+    image,
+    href: '/category/all',
+    titleKey: `hero.slide${(idx % 3) + 1}.title`,
+    subtitleKey: `hero.slide${(idx % 3) + 1}.subtitle`,
+    buttonKey: `hero.slide${(idx % 3) + 1}.button`,
+  }));
+}

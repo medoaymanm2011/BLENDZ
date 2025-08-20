@@ -66,11 +66,19 @@ const HOME_WARW = [
   '/HOME_WARW/imageess.jpg',
 ];
 
+// Deterministic PRNG (same sequence on server and client)
+let __seed = 123456789;
+function seededRandom() {
+  // Linear congruential generator parameters
+  __seed = (1103515245 * __seed + 12345) % 2147483648; // 2^31
+  return __seed / 2147483648;
+}
+
 function pick(arr: string[], n = 3): string[] {
   const copy = [...arr];
   const out: string[] = [];
   while (copy.length && out.length < n) {
-    const i = Math.floor(Math.random() * copy.length);
+    const i = Math.floor(seededRandom() * copy.length);
     out.push(copy.splice(i, 1)[0]!);
   }
   return out;

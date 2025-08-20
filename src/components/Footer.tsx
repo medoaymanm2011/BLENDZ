@@ -2,6 +2,7 @@
 
 import { useLocale } from 'next-intl';
 import Link from 'next/link';
+import Image from 'next/image';
 
 export default function Footer() {
   const locale = useLocale();
@@ -13,13 +14,17 @@ export default function Footer() {
           {/* Brand & Info */}
           <div className="flex flex-col">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-900 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                VILAIN
-              </div>
-              <div className="text-lg font-semibold text-gray-900">Vilain</div>
+              <Link href={`/${locale}`} className="flex items-center" aria-label="Home">
+                <Image
+                  src="/blendz-logo.svg"
+                  alt="BLENDZ"
+                  width={160}
+                  height={40}
+                />
+              </Link>
             </div>
             <p className="text-sm text-gray-500 mb-3">Your trusted online shopping destination</p>
-            <a href="mailto:contact@vilain.com" className="text-sm text-blue-700 hover:text-blue-800">contact@vilain.com</a>
+            <a href="mailto:contact@blendz.com" className="text-sm text-blue-700 hover:text-blue-800">contact@blendz.com</a>
           </div>
 
           {/* Quick Links */}

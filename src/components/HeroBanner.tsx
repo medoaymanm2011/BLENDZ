@@ -4,17 +4,18 @@ import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useLocale, useTranslations } from 'next-intl';
-import { getRandomHeroSlides } from '@/data/home';
+import { getRandomHeroSlides, getDefaultHeroSlides } from '@/data/home';
 
 export default function HeroBanner() {
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [slides, setSlides] = useState(getRandomHeroSlides(5));
+  // Deterministic initial slides for SSR/CSR parity
+  const [slides, setSlides] = useState(getDefaultHeroSlides(5));
   const t = useTranslations();
   const locale = useLocale();
   const isRTL = locale === 'ar';
 
   useEffect(() => {
-    // Re-pick a new random set on mount
+    // Re-pick a new random set on mount (client-only)
     setSlides(getRandomHeroSlides(5));
   }, []);
 

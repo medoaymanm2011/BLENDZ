@@ -120,8 +120,14 @@ export default function Header() {
           <div className="flex items-center justify-between py-4 gap-4">
             {/* Logo */}
             <div className="flex-shrink-0">
-              <Link href={`/${locale}`} className="flex items-center">
-                <span className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-blue-800 text-white text-[10px] font-bold shadow-sm px-2">VILAIN</span>
+              <Link href={`/${locale}`} className="flex items-center" aria-label="Home">
+                <Image
+                  src="/blendz-logo.svg"
+                  alt="BLENDZ"
+                  width={160}
+                  height={40}
+                  priority
+                />
                 <span className="sr-only">{t('brand.name')}</span>
               </Link>
             </div>

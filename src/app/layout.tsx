@@ -8,8 +8,8 @@ const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo" });
 
 export const metadata: Metadata = {
   title: {
-    default: "Vilain Kids | فيلين كيدز",
-    template: "%s | Vilain Kids"
+    default: "BLENDZ | بليندز",
+    template: "%s | BLENDZ"
   },
   description:
     "متجرك المتكامل لجميع مستلزمات الأطفال في أسيوط. نوفر تشكيلة واسعة من الببرونات, عربيات الأطفال, منتجات العناية, والملابس من أشهر الماركات العالمية مثل شيكو, بابلز, وسفاري.",

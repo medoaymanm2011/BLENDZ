@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useConfirmDialog } from '@/context/ConfirmDialogContext';
 
 // Admin emails for demo purposes
-const ADMIN_EMAILS = ['admin@vilain.com', 'manager@vilain.com'];
+const ADMIN_EMAILS = ['admin@blendz.com', 'manager@blendz.com'];
 type StoredUser = {
   name: string;
   email: string;
@@ -70,7 +70,7 @@ export default function AccountPage() {
       const raw = localStorage.getItem(USERS_KEY);
       if (!raw) {
         const seed: StoredUser[] = [
-          { name: 'Demo', email: 'demo@vilain.com', password: '12345678', role: 'user' }
+          { name: 'Demo', email: 'demo@blendz.com', password: '12345678', role: 'user' }
         ];
         localStorage.setItem(USERS_KEY, JSON.stringify(seed));
       }

@@ -5,8 +5,8 @@ import { categories as categoriesData } from '@/data/categories';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
-export default async function CategoriesIndexPage({ params }: { params: { locale: string } }) {
-  const { locale } = params;
+export default async function CategoriesIndexPage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   const t = await getTranslations({ locale });
 
   const first = categoriesData[0];

@@ -24,7 +24,7 @@ export default function CategoryPage() {
   const categoryName = currentCategory ? (locale === 'ar' ? currentCategory.name.ar : currentCategory.name.en) : (categorySlug === 'all' ? (locale === 'ar' ? 'جميع المنتجات' : 'All Products') : categorySlug);
 
   const filteredProducts = useMemo(() => {
-    let filtered = productsData.filter(product => {
+    const filtered = productsData.filter(product => {
       const inCategory = categorySlug === 'all' || product.categorySlugs.includes(categorySlug);
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
       const brandName = brandsData.find(b => b.slug === product.brandSlug)?.name || product.brandSlug;

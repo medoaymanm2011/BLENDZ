@@ -68,7 +68,7 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
 
   // Sort
   const sort = (sp.sort as string) || 'newest';
-  let items: ProductData[] = [...base];
+  const items: ProductData[] = [...base];
   if (sort === 'price_asc') items.sort((a, b) => a.price - b.price);
   else if (sort === 'price_desc') items.sort((a, b) => b.price - a.price);
   else if (sort === 'name_asc') items.sort((a, b) => (a.name.en || '').localeCompare(b.name.en || ''));

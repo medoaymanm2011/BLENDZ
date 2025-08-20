@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import LocaleLink from './LocaleLink';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { brands as brandsData } from '@/data/brands';
@@ -28,7 +28,7 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
         <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-blue-200/20 rounded-full blur-3xl" />
       </div>
       {/* Clickable area to product page */}
-      <Link href={`/${locale}/product/${product.slug}`} className="block">
+      <LocaleLink href={`/product/${product.slug}`} className="block">
         <div className="relative aspect-[4/5] md:aspect-[3/4] bg-gray-100 overflow-hidden">
           {/* Discount/New badge */}
           {product.discount ? (
@@ -61,7 +61,7 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
           )}
           {/* Removed bottom gradient to let the image look full-bleed */}
         </div>
-      </Link>
+      </LocaleLink>
 
       {/* Wishlist toggle - outside Link to avoid navigation */}
       <button
@@ -72,10 +72,10 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
           e.stopPropagation();
           if (isInWishlist(product.id)) {
             removeFromWishlist(product.id);
-            showToast('Removed from Wishlist');
+            showToast(t('toasts.removedFromWishlist'));
           } else {
             addToWishlist(product.id);
-            showToast('Added to Wishlist');
+            showToast(t('toasts.addedToWishlist'));
           }
         }}
         className="absolute top-3 left-3 z-20 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/90 hover:bg-white shadow-md"
@@ -114,7 +114,7 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
       <div className="px-4 pb-4">
         <button
           type="button"
-          onClick={() => { addToCart(product.id, 1); showToast('Added to Cart'); }}
+          onClick={() => { addToCart(product.id, 1); showToast(t('toasts.addedToCart')); }}
           className="w-full inline-flex items-center justify-center gap-2 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800 transition-colors"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 8V7a3 3 0 0 1 6 0v1"/></svg>

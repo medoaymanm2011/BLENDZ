@@ -3,7 +3,7 @@
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { useMemo } from 'react';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
 import BrandProductCard from '@/components/BrandProductCard';
 import BrandFiltersDrawer from '@/components/BrandFiltersDrawer';
@@ -17,6 +17,7 @@ import { categories as categoriesData } from '@/data/categories';
 
 export default function SearchPage() {
   const locale = useLocale();
+  const t = useTranslations();
   const searchParams = useSearchParams();
 
   // Build maps for id<->slug similar to brand page
@@ -76,17 +77,17 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen bg-white">
       <Header />
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-4 md:py-8">
         {/* Page Title & search input like brand page */}
-        <div className="mb-3">
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">{locale === 'ar' ? 'نتائج البحث' : 'Search Results'}</h1>
+        <div className="mb-2">
+          <h1 className="text-xl md:text-3xl font-extrabold text-gray-800">{t('search.resultsTitle')}</h1>
         </div>
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3">
           <ProductSearchInput />
         </div>
 
         {/* Toolbar: Filters + Sort */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="grid grid-cols-2 gap-2 md:flex md:items-center md:justify-between mb-4 md:mb-6">
           <BrandFiltersDrawer />
           <SortDropdown />
         </div>

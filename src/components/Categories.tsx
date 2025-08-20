@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import LocaleLink from './LocaleLink';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { categories as categoriesData } from '@/data/categories';
@@ -25,18 +25,18 @@ export default function Categories() {
             </span>
             <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">{t('categories.title')}</h2>
           </div>
-          <Link href={`/${locale}/category`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
+          <LocaleLink href="/category" className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
             {t('products.viewAll')}
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-          </Link>
+          </LocaleLink>
         </div>
 
         {/* Cards grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
           {categoriesData.map((category) => (
-            <Link
+            <LocaleLink
               key={category.id}
-              href={`/${locale}/search?categories[0]=${category.id}`}
+              href={`/search?categories[0]=${category.id}`}
               className="group relative block h-40 md:h-48 lg:h-56 rounded-2xl overflow-hidden shadow-md hover:shadow-lg transition-shadow"
             >
               {/* Background image */}
@@ -69,7 +69,7 @@ export default function Categories() {
                   {locale === 'ar' ? category.name.ar : category.name.en}
                 </p>
               </div>
-            </Link>
+            </LocaleLink>
           ))}
         </div>
       </div>

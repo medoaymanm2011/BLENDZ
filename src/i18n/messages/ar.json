@@ -63,6 +63,51 @@
   "footer.contact.addressText": "القاهرة، مصر",
   "footer.rights": "جميع الحقوق محفوظة.",
   "footer.payments": "طرق الدفع:",
+  "footer.followUs": "تابعنا",
+
+  "account.myOrders": "طلباتي",
+
+  "header.quickMenu": "القائمة",
+  "header.menu": "القائمة",
+  "header.profile": "الملف الشخصي",
+  "header.logout": "تسجيل الخروج",
+
+  "search.resultsTitle": "نتائج البحث",
+
+  "sort.sortBy": "الترتيب حسب:",
+  "sort.newest": "الأحدث",
+  "sort.priceLowHigh": "السعر: من الأقل للأعلى",
+  "sort.priceHighLow": "السعر: من الأعلى للأقل",
+  "sort.nameAToZ": "الاسم: أ → ي",
+  "sort.nameZToA": "الاسم: ي → أ",
+
+  "filters.open": "فلاتر",
+  "filters.none": "لا يوجد فلاتر",
+  "filters.applied": "تم تطبيق",
+  "filters.title": "الفلاتر",
+  "filters.resetAll": "إعادة الضبط",
+  "filters.brands": "البراندات",
+  "filters.categories": "التصنيفات",
+  "filters.view": "عرض",
+  "filters.priceRange": "نطاق السعر",
+  "filters.minPrice": "أقل سعر",
+  "filters.maxPrice": "أعلى سعر",
+  "filters.resetPrice": "إعادة ضبط السعر",
+  "filters.rangePrefix": "المدى: ",
+  "filters.apply": "تطبيق الفلاتر",
+
+  "toasts.addedToCart": "تمت الإضافة إلى السلة",
+  "toasts.addedToWishlist": "تمت الإضافة إلى المفضلة",
+  "toasts.removedFromWishlist": "تمت الإزالة من المفضلة",
+
+  "sections.featured": "منتجات مميزة",
+  "sections.sale": "منتجات عليها عروض",
+  "sections.new": "وصل حديثًا",
+  "sections.best": "الأكثر مبيعًا",
+  "sections.recommended": "موصى بها لك",
+
+  "auth.loginRequired.title": "يتطلب تسجيل الدخول",
+  "auth.loginRequired.description": "يرجى تسجيل الدخول للوصول إلى حسابك",
   
   "checkout.title": "إتمام الشراء",
   "checkout.customer.title": "بيانات العميل",

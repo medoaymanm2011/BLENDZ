@@ -1,31 +1,36 @@
 "use client";
 
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 const OPTIONS = [
-  { value: "newest", labelEn: "Newest", labelAr: "الأحدث", icon: "clock" },
-  { value: "price_asc", labelEn: "Price: Low to High", labelAr: "السعر: من الأقل للأعلى", icon: "arrow" },
-  { value: "price_desc", labelEn: "Price: High to Low", labelAr: "السعر: من الأعلى للأقل", icon: "arrow" },
-  { value: "name_asc", labelEn: "Name: A to Z", labelAr: "الاسم: أ -> ي", icon: "az" },
-  { value: "name_desc", labelEn: "Name: Z to A", labelAr: "الاسم: ي -> أ", icon: "az" },
+  { value: "newest", icon: "clock" },
+  { value: "price_asc", icon: "arrow" },
+  { value: "price_desc", icon: "arrow" },
+  { value: "name_asc", icon: "az" },
+  { value: "name_desc", icon: "az" },
 ] as const;
 
 type SortValue = typeof OPTIONS[number]["value"];
 
 export default function SortDropdown() {
   const locale = useLocale();
+  const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
 
   const current: SortValue = (searchParams.get("sort") as SortValue) || "newest";
-  const currentLabel = useMemo(() => {
-    const opt = OPTIONS.find((o) => o.value === current) || OPTIONS[0];
-    return locale === "ar" ? opt.labelAr : opt.labelEn;
-  }, [current, locale]);
+  const LABEL_KEYS: Record<typeof OPTIONS[number]["value"], string> = {
+    newest: "sort.newest",
+    price_asc: "sort.priceLowHigh",
+    price_desc: "sort.priceHighLow",
+    name_asc: "sort.nameAToZ",
+    name_desc: "sort.nameZToA",
+  };
+  const currentLabel = useMemo(() => t(LABEL_KEYS[current]), [current, t]);
 
   function setSort(value: SortValue) {
     const params = new URLSearchParams(searchParams.toString());
@@ -43,7 +48,7 @@ export default function SortDropdown() {
         onClick={() => setOpen((v) => !v)}
         className="inline-flex items-center gap-2 pl-3 pr-2 py-2 rounded-lg border-2 border-blue-500 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-200"
       >
-        <span className="text-sm text-gray-600">{locale === 'ar' ? 'الترتيب حسب:' : 'Sort by:'}</span>
+        <span className="text-sm text-gray-600">{t('sort.sortBy')}</span>
         <span className="font-medium flex items-center gap-1 text-gray-800">
           {(() => {
             const opt = OPTIONS.find(o => o.value === current);
@@ -61,7 +66,7 @@ export default function SortDropdown() {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-64 rounded-xl border border-gray-200 bg-white shadow-lg py-2 z-50">
+        <div className={`absolute ${locale === 'ar' ? 'left-0' : 'right-0'} mt-2 w-64 rounded-xl border border-gray-200 bg-white shadow-lg py-2 z-50`}>
           {OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -79,7 +84,7 @@ export default function SortDropdown() {
                 {opt.icon === 'az' && (
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h10M7 12h10M7 17h10"/></svg>
                 )}
-                <span>{locale === 'ar' ? opt.labelAr : opt.labelEn}</span>
+                <span>{t(LABEL_KEYS[opt.value])}</span>
               </span>
               {current === opt.value && (
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"/></svg>

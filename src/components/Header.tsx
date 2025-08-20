@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react';
 import SearchOverlay from '@/components/SearchOverlay';
 import { useTranslations, useLocale } from 'next-intl';
-import Link from 'next/link';
+import Link from './LocaleLink';
+import Portal from './Portal';
 import { useToast } from '@/context/ToastContext';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
@@ -13,8 +14,11 @@ import { categories as categoriesData } from '@/data/categories';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isQuickOpen, setIsQuickOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [catsOpen, setCatsOpen] = useState(true);
+  const [quickBackdropReady, setQuickBackdropReady] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [user, setUser] = useState<{ name: string; email: string; role?: string } | null>(null);
   const t = useTranslations();
@@ -57,6 +61,17 @@ export default function Header() {
       }
     } catch {}
   }, []);
+
+  // When quick drawer opens, delay enabling backdrop click to avoid the initial tap closing it immediately
+  useEffect(() => {
+    if (isQuickOpen) {
+      setQuickBackdropReady(false);
+      const id = setTimeout(() => setQuickBackdropReady(true), 150);
+      return () => clearTimeout(id);
+    } else {
+      setQuickBackdropReady(false);
+    }
+  }, [isQuickOpen]);
 
   useEffect(() => {
     const syncUser = () => {
@@ -113,19 +128,20 @@ export default function Header() {
   })();
 
   return (
-    <header className="w-full sticky top-0 z-50 backdrop-blur bg-white/70 supports-[backdrop-filter]:bg-white/60 border-b">
+    <header className="w-full sticky top-0 z-[10000] pointer-events-auto backdrop-blur bg-white/70 supports-[backdrop-filter]:bg-white/60 border-b">
       {/* Main Header */}
       <div className="bg-transparent">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between py-4 gap-4">
             {/* Logo */}
-            <div className="flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <Link href={`/${locale}`} className="flex items-center" aria-label="Home">
                 <Image
                   src="/blendz-logo.svg"
                   alt="BLENDZ"
                   width={160}
                   height={40}
+                  className="h-10 w-auto"
                   priority
                 />
                 <span className="sr-only">{t('brand.name')}</span>
@@ -221,8 +237,24 @@ export default function Header() {
             {/* Spacer to keep layout balanced */}
             <div className="flex-1" />
 
-            {/* Action Icons + Language */}
-            <div className="flex items-center gap-3">
+            {/* Right side: mobile quick button + desktop actions */}
+            <div className="flex items-center gap-2">
+              {/* Mobile quick menu button (right side) */}
+              <button
+                type="button"
+                className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50 shadow-sm text-black relative z-[10001]"
+                aria-label="Open quick menu"
+                onClick={(e) => { e.stopPropagation(); setIsMenuOpen(false); setIsUserMenuOpen(false); setIsQuickOpen(true); }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => { e.stopPropagation(); setIsMenuOpen(false); setIsUserMenuOpen(false); setIsQuickOpen(true); }}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              </button>
+
+              {/* Action Icons + Language (desktop only) */}
+              <div className="hidden lg:flex items-center gap-3">
               {/* Search icon */}
               <button onClick={() => setIsSearchOpen(true)} className="text-gray-700 hover:text-blue-700 inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-transparent hover:bg-gray-100 shadow-sm" aria-label="Open Search">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -231,7 +263,7 @@ export default function Header() {
               </button>
 
               <Link prefetch href={`/${locale}/wishlist`} onMouseEnter={() => prefetch(`/${locale}/wishlist`)}
-                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: 'Login Required', description: 'Please login to view your wishlist' }); } }}
+                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description') }); } }}
                 className="text-gray-700 hover:text-blue-700 inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-transparent hover:bg-gray-100 shadow-sm">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -244,7 +276,7 @@ export default function Header() {
               >
                 <button
                   type="button"
-                  onClick={() => { if (!user) { goToLogin({ title: 'Login Required', description: 'Please login to access your account' }); return; } setIsUserMenuOpen((v) => !v); }}
+                  onClick={() => { if (!user) { goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description') }); return; } setIsUserMenuOpen((v) => !v); }}
                   className="text-gray-700 hover:text-blue-700 relative inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-transparent hover:bg-gray-100 shadow-sm"
                   aria-haspopup="menu"
                   aria-expanded={isUserMenuOpen}
@@ -268,10 +300,10 @@ export default function Header() {
                     className={`absolute ${locale === 'ar' ? 'left-0' : 'right-0'} mt-2 w-44 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2 z-[60]`}
                   >
                     <Link href={`/${locale}/account`} className="block px-4 py-2 text-sm text-gray-800 hover:bg-gray-100" onClick={() => setIsUserMenuOpen(false)}>
-                      Profile
+                      {t('header.profile')}
                     </Link>
                     <Link href={`/${locale}/orders`} className="block px-4 py-2 text-sm text-gray-800 hover:bg-gray-100" onClick={() => setIsUserMenuOpen(false)}>
-                      My Orders
+                      {t('account.myOrders')}
                     </Link>
                     <button
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -284,14 +316,14 @@ export default function Header() {
                         router.push(`/${locale}`);
                       }}
                     >
-                      Logout
+                      {t('header.logout')}
                     </button>
                   </div>
                 )}
               </div>
 
               <Link prefetch href={`/${locale}/cart`} onMouseEnter={() => prefetch(`/${locale}/cart`)}
-                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: 'Login Required', description: 'Please login to add items to cart' }); } }}
+                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description') }); } }}
                 className="text-gray-700 hover:text-blue-700 relative inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-transparent hover:bg-gray-100 shadow-sm">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" />
@@ -321,46 +353,187 @@ export default function Header() {
                 {otherLocale === 'ar' ? 'AR' : 'EN'}
               </Link>
             </div>
-          </div>
-
-          {/* Mobile nav toggle row */}
-          <div className="lg:hidden flex items-center justify-between pb-3 border-t border-gray-200">
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="flex items-center gap-2 text-gray-700 hover:text-blue-700 py-3"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-              </svg>
-              <span>{t('nav.shopByCategory')}</span>
-            </button>
-            <div className="flex items-center gap-6">
-              <Link href={`/${locale}/sections/bestseller`} className="text-gray-700 hover:text-blue-700">{t('nav.bestSellers')}</Link>
-              <Link href={`/${locale}/search?categories[0]=${dropdownCategories[0]?.id ?? 1}`} className="text-gray-700 hover:text-blue-700">{t('nav.offers')}</Link>
-              <Link href={`/${locale}/search?categories[0]=${dropdownCategories[1]?.id ?? 2}`} className="text-gray-700 hover:text-blue-700">{t('nav.new')}</Link>
             </div>
           </div>
+
+          {/* Mobile nav toggle row removed: all items are in the quick drawer */}
 
         </div>
       </div>
 
-      {/* Categories Dropdown (mobile or when toggled) */}
+      {/* Mobile Drawer (right side) */}
       {isMenuOpen && (
-        <div className="bg-white shadow-lg border-t">
-          <div className="container mx-auto px-4 py-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {dropdownCategories.map((cat) => (
-                <Link
-                  key={cat.slug}
-                  href={`/${locale}/search?categories[0]=${cat.id}`}
-                  className="text-gray-700 hover:text-blue-700 py-2"
-                >
-                  {locale === 'ar' ? cat.name.ar : cat.name.en}
+        <Portal>
+        <div className="lg:hidden fixed inset-0 z-[9998]">
+          {/* Backdrop */}
+          <button
+            aria-label="Close menu"
+            onClick={() => setIsMenuOpen(false)}
+            className="absolute inset-0 bg-black/40"
+          />
+          {/* Panel */}
+          <div className={`absolute top-0 right-0 h-full w-80 max-w-[85vw] bg-white shadow-xl border-l flex flex-col text-start`}>
+            <div className="flex items-center justify-between px-4 py-3 border-b text-black">
+              <span className="font-semibold text-gray-800">{t('header.menu')}</span>
+              <button onClick={() => setIsMenuOpen(false)} className="w-9 h-9 inline-flex items-center justify-center rounded-full hover:bg-gray-100 text-black" aria-label="Close">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="p-4 space-y-4 overflow-y-auto">
+              {/* Quick actions */}
+              <div className={`grid grid-cols-4 gap-3 text-black ${locale === 'ar' ? 'justify-items-end' : 'justify-items-start'}`}>
+                <button onClick={() => { setIsMenuOpen(false); setIsSearchOpen(true); }} className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                </button>
+                <Link href={`/${locale}/wishlist`} onClick={() => setIsMenuOpen(false)} className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                 </Link>
-              ))}
+                <button onClick={() => { setIsMenuOpen(false); if (!user) { goToLogin({ title: 'Login Required', description: 'Please login to access your account' }); return; } setIsUserMenuOpen(true); }} className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                </button>
+                <Link href={`/${locale}/cart`} onClick={() => setIsMenuOpen(false)} className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8V7a3 3 0 0 1 6 0v1" /></svg>
+                </Link>
+              </div>
+
+              {/* Primary links */}
+              <nav className="space-y-2">
+                <Link href={`/${locale}`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.home')}</Link>
+                <Link href={`/${locale}/sections/bestseller`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.bestSellers')}</Link>
+                <Link href={`/${locale}/contact`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.contact')}</Link>
+                <Link href={`/${locale}/brands`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.brands')}</Link>
+                <Link href={switchHref} onClick={() => setIsMenuOpen(false)} className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 mt-2">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 0c2.5 2.5 2.5 15.5 0 18m0-18c-2.5 2.5-2.5 15.5 0 18M3 12h18"/></svg>
+                  {otherLocale === 'ar' ? 'AR' : 'EN'}
+                </Link>
+              </nav>
+
+              {/* Categories */}
+              <div className="pt-2">
+                <div className="text-xs font-semibold text-gray-500 px-1 mb-2">{t('nav.shopByCategory')}</div>
+                <div className="grid grid-cols-2 gap-3">
+                  {orderedCategories.map((cat) => (
+                    <Link key={cat.slug} href={`/${locale}/search?categories[0]=${cat.id}`} onClick={() => setIsMenuOpen(false)} className="text-gray-700 hover:text-blue-700 py-1">
+                      {locale === 'ar' ? cat.name.ar : cat.name.en}
+                    </Link>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
+        </Portal>
+      )}
+
+      {/* Quick Actions Drawer (right side) */}
+      {isQuickOpen && (
+        <Portal>
+        <div className="lg:hidden fixed inset-0 z-[9999]" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
+          {/* Backdrop */}
+          <div
+            aria-hidden
+            className={`absolute inset-0 bg-black/40 transition-opacity ${quickBackdropReady ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-100'}`}
+            onClick={() => { if (quickBackdropReady) setIsQuickOpen(false); }}
+          />
+          {/* Panel */}
+          <div
+            className={`fixed top-0 right-0 h-full w-full sm:w-80 max-w-[100vw] bg-white shadow-xl border-l flex flex-col min-h-0 text-start text-black`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b sticky top-0 bg-white z-10">
+              <span className="font-semibold">{t('header.quickMenu')}</span>
+              <button onClick={() => setIsQuickOpen(false)} className="w-9 h-9 inline-flex items-center justify-center rounded-full hover:bg-gray-100 text-black" aria-label="Close">
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto min-h-0 overscroll-contain">
+              {/* Quick actions */}
+              <div className="px-4 py-3 border-b">
+                <div className="grid grid-cols-4 gap-3">
+                  <button onClick={() => { setIsQuickOpen(false); setIsSearchOpen(true); }} className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </span>
+                    <span className="text-[11px] text-gray-600">{t('search.title')}</span>
+                  </button>
+                  <Link href={`/${locale}/wishlist`} onClick={() => setIsQuickOpen(false)} className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                    </span>
+                    <span className="text-[11px] text-gray-600">{t('header.wishlist')}</span>
+                  </Link>
+                  <button onClick={() => { setIsQuickOpen(false); if (!user) { goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description') }); return; } setIsUserMenuOpen(true); }} className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                    </span>
+                    <span className="text-[11px] text-gray-600">{t('header.account')}</span>
+                  </button>
+                  <Link href={`/${locale}/cart`} onClick={() => setIsQuickOpen(false)} className="flex flex-col items-center gap-1">
+                    <span className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8V7a3 3 0 0 1 6 0v1" /></svg>
+                    </span>
+                    <span className="text-[11px] text-gray-600">{t('header.cart')}</span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Primary links as list */}
+              <div className="px-2 py-1">
+                <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100 overflow-hidden">
+                  <li>
+                    <Link href={`/${locale}`} onClick={() => setIsQuickOpen(false)} className="flex items-center justify-between px-4 py-3 text-gray-800 hover:bg-gray-50">
+                      <span>{t('nav.home')}</span>
+                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href={`/${locale}/brands`} onClick={() => setIsQuickOpen(false)} className="flex items-center justify-between px-4 py-3 text-gray-800 hover:bg-gray-50">
+                      <span>{t('nav.brands')}</span>
+                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href={`/${locale}/sections/bestseller`} onClick={() => setIsQuickOpen(false)} className="flex items-center justify-between px-4 py-3 text-gray-800 hover:bg-gray-50">
+                      <span>{t('nav.bestSellers')}</span>
+                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href={`/${locale}/contact`} onClick={() => setIsQuickOpen(false)} className="flex items-center justify-between px-4 py-3 text-gray-800 hover:bg-gray-50">
+                      <span>{t('nav.contact')}</span>
+                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                  </li>
+                  <li>
+                    <Link href={switchHref} onClick={() => setIsQuickOpen(false)} className="flex items-center justify-between px-4 py-3 text-gray-800 hover:bg-gray-50">
+                      <span className="inline-flex items-center gap-2"><svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 0c2.5 2.5 2.5 15.5 0 18m0-18c-2.5 2.5-2.5 15.5 0 18M3 12h18"/></svg>{otherLocale === 'ar' ? 'AR' : 'EN'}</span>
+                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Categories accordion */}
+              <div className="px-2 pb-5">
+                <button onClick={() => setCatsOpen(v => !v)} className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-gray-700">
+                  <span className="text-gray-600">{t('nav.shopByCategory')}</span>
+                  <svg className={`w-4 h-4 text-gray-400 transition-transform ${catsOpen ? 'rotate-90' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                </button>
+                {catsOpen && (
+                  <div className="grid grid-cols-2 gap-3 px-2">
+                    {orderedCategories.map((cat) => (
+                      <Link key={cat.slug} href={`/${locale}/search?categories[0]=${cat.id}`} onClick={() => setIsQuickOpen(false)} className="text-gray-700 hover:text-blue-700 py-1 text-sm">
+                        {locale === 'ar' ? cat.name.ar : cat.name.en}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        </Portal>
       )}
       {/* Search Overlay */}
       <SearchOverlay open={isSearchOpen} onClose={() => setIsSearchOpen(false)} />

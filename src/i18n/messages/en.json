@@ -63,6 +63,51 @@
   "footer.contact.addressText": "Cairo, Egypt",
   "footer.rights": "All rights reserved.",
   "footer.payments": "Payment methods:",
+  "footer.followUs": "Follow Us",
+
+  "account.myOrders": "My Orders",
+
+  "header.quickMenu": "Quick Menu",
+  "header.menu": "Menu",
+  "header.profile": "Profile",
+  "header.logout": "Logout",
+
+  "search.resultsTitle": "Search Results",
+
+  "sort.sortBy": "Sort by:",
+  "sort.newest": "Newest",
+  "sort.priceLowHigh": "Price: Low to High",
+  "sort.priceHighLow": "Price: High to Low",
+  "sort.nameAToZ": "Name: A → Z",
+  "sort.nameZToA": "Name: Z → A",
+
+  "filters.open": "Filters",
+  "filters.none": "No filters",
+  "filters.applied": "Applied",
+  "filters.title": "Filters",
+  "filters.resetAll": "Reset all",
+  "filters.brands": "Brands",
+  "filters.categories": "Categories",
+  "filters.view": "View",
+  "filters.priceRange": "Price Range",
+  "filters.minPrice": "Min Price",
+  "filters.maxPrice": "Max Price",
+  "filters.resetPrice": "Reset Price",
+  "filters.rangePrefix": "Range: ",
+  "filters.apply": "Apply Filters",
+
+  "toasts.addedToCart": "Added to Cart",
+  "toasts.addedToWishlist": "Added to Wishlist",
+  "toasts.removedFromWishlist": "Removed from Wishlist",
+
+  "sections.featured": "Featured Products",
+  "sections.sale": "Products On Sale",
+  "sections.new": "New Arrivals",
+  "sections.best": "Best Sellers",
+  "sections.recommended": "Recommended For You",
+
+  "auth.loginRequired.title": "Login Required",
+  "auth.loginRequired.description": "Please login to access your account",
 
   "checkout.title": "Checkout",
   "checkout.customer.title": "Customer Information",

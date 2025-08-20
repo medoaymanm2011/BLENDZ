@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import LocaleLink from './LocaleLink';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { useStore } from '@/context/StoreContext';
@@ -79,7 +79,7 @@ export default function ProductSections() {
 
     return (
       <div className="relative w-80 flex-shrink-0">
-      <Link href={`/${locale}/product/${product.slug}`} className="group relative block bg-white rounded-2xl shadow-sm transition-all overflow-hidden border border-gray-200 will-change-transform hover:-translate-y-1 hover:scale-[1.01] hover:shadow-2xl hover:border-blue-100 hover:ring-1 hover:ring-blue-200/60">
+      <LocaleLink href={`/product/${product.slug}`} className="group relative block bg-white rounded-2xl shadow-sm transition-all overflow-hidden border border-gray-200 will-change-transform hover:-translate-y-1 hover:scale-[1.01] hover:shadow-2xl hover:border-blue-100 hover:ring-1 hover:ring-blue-200/60">
         {/* soft glow overlay */}
         <div className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" aria-hidden>
           <div className="absolute -top-8 -left-8 w-40 h-40 bg-white/40 rounded-full blur-2xl" />
@@ -144,7 +144,7 @@ export default function ProductSections() {
               e.preventDefault();
               e.stopPropagation();
               addToCart(product.id, 1);
-              showToast('Added to Cart');
+              showToast(t('toasts.addedToCart'));
             }}
           >
             {/* bag icon */}
@@ -152,7 +152,7 @@ export default function ProductSections() {
             {t('products.addToCart')}
           </button>
         </div>
-      </Link>
+      </LocaleLink>
 
       {/* Wishlist overlay button (outside Link) */}
       <button
@@ -193,12 +193,12 @@ export default function ProductSections() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 13.5L8 20l4-2 4 2-1.5-6.5" />
                 </svg>
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">Featured Products</h2>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">{t('sections.featured')}</h2>
             </div>
-            <Link href={`/${locale}/sections/featured`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
-              View All
+            <LocaleLink href={`/sections/featured`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
+              {t('products.viewAll')}
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-            </Link>
+            </LocaleLink>
           </div>
           <div className="relative">
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
@@ -225,12 +225,12 @@ export default function ProductSections() {
                   <circle cx="17" cy="17" r="1.5"/>
                 </svg>
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">Products On Sale</h2>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">{t('sections.sale')}</h2>
             </div>
-            <Link href={`/${locale}/sections/sale`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
-              View All
+            <LocaleLink href={`/sections/sale`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
+              {t('products.viewAll')}
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-            </Link>
+            </LocaleLink>
           </div>
           <div className="relative">
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
@@ -255,12 +255,12 @@ export default function ProductSections() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 14l.9 1.9L8 17l-1.6.5L5 19l-.9-1.5L2 17l2.1-1.1L5 14zM19 12l.9 1.9L22 15l-1.6.5L19 17l-.9-1.5L16 15l2.1-1.1L19 12z"/>
                 </svg>
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">New Arrivals</h2>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">{t('sections.new')}</h2>
             </div>
-            <Link href={`/${locale}/sections/new`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
-              View All
+            <LocaleLink href={`/sections/new`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
+              {t('products.viewAll')}
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-            </Link>
+            </LocaleLink>
           </div>
           <div className="relative">
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
@@ -284,12 +284,12 @@ export default function ProductSections() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 2l2.3 4.7 5.2.8-3.7 3.7.9 5.3L12 14.8 7.3 16.5l.9-5.3L4.5 7.5l5.2-.8L12 2z"/>
                 </svg>
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">Best Sellers</h2>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">{t('sections.best')}</h2>
             </div>
-            <Link href={`/${locale}/sections/bestseller`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
-              View All
+            <LocaleLink href={`/sections/bestseller`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
+              {t('products.viewAll')}
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-            </Link>
+            </LocaleLink>
           </div>
           <div className="relative">
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
@@ -313,12 +313,12 @@ export default function ProductSections() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4l2.2 4.5 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 9.2l5-.7L12 4z"/>
                 </svg>
               </span>
-              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">Recommended For You</h2>
+              <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">{t('sections.recommended')}</h2>
             </div>
-            <Link href={`/${locale}/sections/recommended`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
-              View All
+            <LocaleLink href={`/sections/recommended`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
+              {t('products.viewAll')}
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-            </Link>
+            </LocaleLink>
           </div>
           <div className="relative">
             <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">

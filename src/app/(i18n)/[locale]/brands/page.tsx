@@ -2,13 +2,14 @@
 
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import Link from 'next/link';
+import LocaleLink from '@/components/LocaleLink';
 import Image from 'next/image';
-import { useLocale } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
 import { brands } from '@/data/brands';
 
 export default function BrandsPage() {
   const locale = useLocale();
+  const t = useTranslations();
 
   const Card = ({
     name,
@@ -19,8 +20,8 @@ export default function BrandsPage() {
     image?: string;
     slug: string;
   }) => (
-    <Link
-      href={`/${locale}/search?brand=${encodeURIComponent(slug)}`}
+    <LocaleLink
+      href={`/search?brand=${encodeURIComponent(slug)}`}
       className="group relative block rounded-3xl overflow-hidden bg-white shadow-sm hover:shadow-md transition"
     >
       <div className="relative h-40 md:h-48 lg:h-52 bg-gradient-to-b from-gray-100 to-gray-400">
@@ -41,7 +42,7 @@ export default function BrandsPage() {
           <div className="text-white font-extrabold tracking-wide uppercase drop-shadow-sm">{name}</div>
         </div>
       </div>
-    </Link>
+    </LocaleLink>
   );
 
   return (
@@ -56,7 +57,7 @@ export default function BrandsPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 16.5L12 21 4.5 16.5"/>
             </svg>
           </span>
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">Brands</h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">{t('brands.title')}</h1>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">

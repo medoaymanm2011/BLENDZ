@@ -8,25 +8,30 @@ const cairo = Cairo({ subsets: ["arabic", "latin"], variable: "--font-cairo" });
 
 export const metadata: Metadata = {
   title: {
-    default: "BLENDZ | بليندز",
+    default: "BLENDZ",
     template: "%s | BLENDZ"
   },
   description:
     "متجرك المتكامل لجميع مستلزمات الأطفال في أسيوط. نوفر تشكيلة واسعة من الببرونات, عربيات الأطفال, منتجات العناية, والملابس من أشهر الماركات العالمية مثل شيكو, بابلز, وسفاري.",
   icons: {
     icon: [
-      "/favicon.ico",
-      { url: "https://www.vilainkids.com/storage/settings/01JYKA424V86KN9ND8PRE62CZF.png", type: "image/png" }
+      { url: "/blendz-icon.svg?v=3", type: "image/svg+xml" }
     ],
     shortcut: [
-      "/favicon.ico",
-      { url: "https://www.vilainkids.com/storage/settings/01JYKA424V86KN9ND8PRE62CZF.png", type: "image/png" }
+      { url: "/blendz-icon.svg?v=3", type: "image/svg+xml" }
+    ],
+    other: [
+      // Safari pinned tab
+      { rel: "mask-icon", url: "/blendz-icon.svg?v=3", color: "#1d4ed8" }
     ],
   },
-  manifest: "/manifest.json",
 };
 
 export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  viewportFit: 'cover',
   themeColor: "#1d4ed8",
 };
 

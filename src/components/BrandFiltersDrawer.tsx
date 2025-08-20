@@ -113,7 +113,7 @@ export default function BrandFiltersDrawer() {
           className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 shadow-sm"
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M3 4h18M6 10h12M10 16h4M11 20h2"/></svg>
-          <span>{locale === 'ar' ? 'فلاتر' : 'Filters'}</span>
+          <span>{t('filters.open')}</span>
           {appliedCount > 0 && (
             <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold">
               {appliedCount}
@@ -121,9 +121,7 @@ export default function BrandFiltersDrawer() {
           )}
         </button>
         <span className="text-sm text-gray-600">
-          {appliedCount > 0
-            ? (locale === 'ar' ? 'تم تطبيق' : 'Applied') + ' ' + appliedCount
-            : (locale === 'ar' ? 'لا يوجد فلاتر' : 'No filters')}
+          {appliedCount > 0 ? `${t('filters.applied')} ${appliedCount}` : t('filters.none')}
         </span>
       </div>
 
@@ -145,14 +143,14 @@ export default function BrandFiltersDrawer() {
         aria-modal="true"
       >
         <div className="flex items-center justify-between p-5 border-b border-gray-200 bg-white z-10 rounded-tl-2xl">
-          <h3 className="text-2xl font-extrabold text-gray-800">{locale === 'ar' ? 'الفلاتر' : 'Filters'}</h3>
+          <h3 className="text-2xl font-extrabold text-gray-800">{t('filters.title')}</h3>
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={resetAll}
               className="text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-xl shadow-sm"
             >
-              {locale === 'ar' ? 'إعادة الضبط' : 'Reset all'}
+              {t('filters.resetAll')}
             </button>
             <button
               type="button"
@@ -168,7 +166,7 @@ export default function BrandFiltersDrawer() {
         <div className="p-5 space-y-6 overflow-y-auto flex-1">
           {/* Brands */}
           <section>
-            <h4 className="text-lg font-bold text-gray-800 mb-3">{locale === 'ar' ? 'البراندات' : 'Brands'}</h4>
+            <h4 className="text-lg font-bold text-gray-800 mb-3">{t('filters.brands')}</h4>
             <div className="space-y-3">
               {brandsData.map((b) => (
                 <label key={b.slug} className="flex items-center gap-3 text-[15px] text-gray-800">
@@ -186,7 +184,7 @@ export default function BrandFiltersDrawer() {
           <div className="border-t border-gray-200 my-2" />
           {/* Categories */}
           <section>
-            <h4 className="text-lg font-bold text-gray-800 mb-3">{locale === 'ar' ? 'التصنيفات' : 'Categories'}</h4>
+            <h4 className="text-lg font-bold text-gray-800 mb-3">{t('filters.categories')}</h4>
             <div className="space-y-3">
               {categoriesData.map((c) => (
                 <div key={c.slug} className="flex items-center justify-between gap-3 text-[15px] text-gray-800">
@@ -213,7 +211,7 @@ export default function BrandFiltersDrawer() {
                     onClick={() => { router.push(`/${locale}/search?categories[0]=${c.id}`); setOpen(false); }}
                     aria-label="Open category"
                   >
-                    عرض
+                    {t('filters.view')}
                   </button>
                 </div>
               ))}
@@ -222,10 +220,10 @@ export default function BrandFiltersDrawer() {
           <div className="border-t border-gray-200 my-2" />
           {/* Price Range */}
           <section>
-            <h4 className="text-lg font-bold text-gray-800 mb-3">{locale === 'ar' ? 'نطاق السعر' : 'Price Range'}</h4>
+            <h4 className="text-lg font-bold text-gray-800 mb-3">{t('filters.priceRange')}</h4>
             <div className="grid grid-cols-[1fr_auto_1fr] gap-3 items-end">
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{locale === 'ar' ? 'أقل سعر' : 'Min Price'}</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('filters.minPrice')}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -237,7 +235,7 @@ export default function BrandFiltersDrawer() {
               </div>
               <div className="pb-2 text-center text-gray-400">—</div>
               <div>
-                <label className="block text-xs text-gray-500 mb-1">{locale === 'ar' ? 'أعلى سعر' : 'Max Price'}</label>
+                <label className="block text-xs text-gray-500 mb-1">{t('filters.maxPrice')}</label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -254,11 +252,11 @@ export default function BrandFiltersDrawer() {
                 onClick={() => { setMinPrice(''); setMaxPrice(''); }}
                 className="text-sm text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-xl shadow-sm"
               >
-                {locale === 'ar' ? 'إعادة ضبط السعر' : 'Reset Price'}
+                {t('filters.resetPrice')}
               </button>
               {(minPrice && maxPrice) && (
                 <span className="text-sm text-black">
-                  {locale === 'ar' ? 'المدى: ' : 'Range: '}
+                  {t('filters.rangePrefix')}
                   {Number(minPrice).toFixed(2)} - {Number(maxPrice).toFixed(2)}
                 </span>
               )}
@@ -272,7 +270,7 @@ export default function BrandFiltersDrawer() {
             onClick={apply}
             className="w-full inline-flex items-center justify-center gap-2 bg-blue-900 text-white py-3 rounded-xl hover:bg-blue-800 transition-colors font-semibold"
           >
-            {locale === 'ar' ? 'تطبيق الفلاتر' : 'Apply Filters'}
+            {t('filters.apply')}
           </button>
         </div>
       </div>

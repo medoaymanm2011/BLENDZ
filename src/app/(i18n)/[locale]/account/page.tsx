@@ -325,7 +325,7 @@ export default function AccountPage() {
             </div>
           ) : (
             <div className="mx-auto max-w-md w-full min-h-[80vh] grid place-items-center">
-              <div className="w-full translate-x-12 md:translate-x-20 lg:translate-x-28">
+              <div className="w-full mx-auto">
                 {/* Removed segmented toggle buttons for cleaner layout */}
 
                 {message && (

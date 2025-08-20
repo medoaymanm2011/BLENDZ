@@ -1,11 +1,12 @@
 'use client';
 
-import { useLocale } from 'next-intl';
-import Link from 'next/link';
+import { useLocale, useTranslations } from 'next-intl';
+import Link from './LocaleLink';
 import Image from 'next/image';
 
 export default function Footer() {
   const locale = useLocale();
+  const t = useTranslations();
 
   return (
     <footer className="bg-gray-50 text-gray-700 mt-12 border-t border-gray-200">
@@ -20,27 +21,28 @@ export default function Footer() {
                   alt="BLENDZ"
                   width={160}
                   height={40}
+                  className="h-10 w-auto"
                 />
               </Link>
             </div>
-            <p className="text-sm text-gray-500 mb-3">Your trusted online shopping destination</p>
+            <p className="text-sm text-gray-500 mb-3">{t('footer.about.description')}</p>
             <a href="mailto:contact@blendz.com" className="text-sm text-blue-700 hover:text-blue-800">contact@blendz.com</a>
           </div>
 
           {/* Quick Links */}
           <div>
-            <h3 className="text-base font-semibold text-gray-900 mb-4">Quick Links</h3>
+            <h3 className="text-base font-semibold text-gray-900 mb-4">{t('footer.quickLinks.title')}</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link className="hover:text-gray-900" href={`/${locale}/category/all`}>Categories</Link></li>
-              <li><Link className="hover:text-gray-900" href={`/${locale}/brands`}>Brands</Link></li>
-              <li><Link className="hover:text-gray-900" href={`/${locale}/account/orders`}>My Orders</Link></li>
-              <li><Link className="hover:text-gray-900" href={`/${locale}/wishlist`}>Wishlist</Link></li>
+              <li><Link className="hover:text-gray-900" href={`/${locale}/category/all`}>{t('categories.title')}</Link></li>
+              <li><Link className="hover:text-gray-900" href={`/${locale}/brands`}>{t('nav.brands')}</Link></li>
+              <li><Link className="hover:text-gray-900" href={`/${locale}/account/orders`}>{t('account.myOrders')}</Link></li>
+              <li><Link className="hover:text-gray-900" href={`/${locale}/wishlist`}>{t('header.wishlist')}</Link></li>
             </ul>
           </div>
 
           {/* Follow Us */}
           <div>
-            <h3 className="text-base font-semibold text-gray-900 mb-4">Follow Us</h3>
+            <h3 className="text-base font-semibold text-gray-900 mb-4">{t('footer.followUs')}</h3>
             <ul className="space-y-2 text-sm">
               <li>
                 <a href="https://facebook.com" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 hover:text-gray-900">
@@ -60,11 +62,11 @@ export default function Footer() {
 
         {/* Bottom Bar */}
         <div className="mt-8 pt-6 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between text-xs text-gray-500">
-          <p>© {new Date().getFullYear()} All rights reserved</p>
+          <p>© {new Date().getFullYear()} {t('footer.rights')}</p>
           <div className="flex items-center gap-4 mt-3 sm:mt-0">
-            <Link className="hover:text-gray-700" href={`/${locale}/policy/privacy`}>Privacy Policy</Link>
-            <Link className="hover:text-gray-700" href={`/${locale}/policy/returns`}>Return Policy</Link>
-            <Link className="hover:text-gray-700" href={`/${locale}/policy/terms`}>Terms of Service</Link>
+            <Link className="hover:text-gray-700" href={`/${locale}/policy/privacy`}>{t('footer.policies.privacy')}</Link>
+            <Link className="hover:text-gray-700" href={`/${locale}/policy/returns`}>{t('footer.policies.returns')}</Link>
+            <Link className="hover:text-gray-700" href={`/${locale}/policy/terms`}>{t('footer.policies.terms')}</Link>
           </div>
         </div>
       </div>

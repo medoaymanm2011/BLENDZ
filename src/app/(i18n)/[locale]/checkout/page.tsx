@@ -2,7 +2,7 @@
 
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { CreditCard, Truck, Home, Phone, Mail, MapPin, ClipboardList, Tag, CheckCircle2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
@@ -65,6 +65,23 @@ export default function CheckoutPage() {
   const locale = useLocale();
   const router = useRouter();
   const t = useTranslations();
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = (document.body.style as any).touchAction;
+    if (showAddressForm) {
+      document.body.style.overflow = 'hidden';
+      (document.body.style as any).touchAction = 'none';
+    } else {
+      document.body.style.overflow = prevOverflow || '';
+      (document.body.style as any).touchAction = prevTouchAction || '';
+    }
+    return () => {
+      document.body.style.overflow = prevOverflow || '';
+      (document.body.style as any).touchAction = prevTouchAction || '';
+    };
+  }, [showAddressForm]);
 
   const lineItems = useMemo(() => {
     return store.cart.map((ci) => {
@@ -221,22 +238,43 @@ export default function CheckoutPage() {
             <div className="text-sm text-[#2F3E77] mb-4">{locale === 'ar' ? `العناصر في سلتك: ${itemsCount}` : `Items in your cart: ${itemsCount}`}</div>
 
             <div className="space-y-3 text-sm">
-              <div className="flex justify-between"><span className="text-[#2F3E77]">{locale === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span><span className="text-[#2F3E77] font-extrabold">{nf.format(subtotal)} {currency}</span></div>
-              <div className="flex justify-between"><span className="text-[#2F3E77] flex items-center gap-1"><Truck className="w-4 h-4" /> {locale === 'ar' ? 'الشحن' : 'Shipping'}</span>
-                <span className="text-gray-900 font-medium">{shippingVal == null ? (locale === 'ar' ? 'يرجى اختيار عنوان الشحن' : 'Please select a shipping address') : `${nf.format(shippingVal)} ${currency}`}</span>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3">
+                <span className="text-[#2F3E77] leading-5 flex-none">{locale === 'ar' ? 'المجموع الفرعي' : 'Subtotal'}</span>
+                <span className="text-[#2F3E77] font-extrabold leading-5 sm:flex-1 sm:min-w-0 sm:ltr:text-right sm:rtl:text-left break-words hyphens-auto">{nf.format(subtotal)} {currency}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3">
+                <span className="text-[#2F3E77] flex items-center gap-1 leading-5 flex-none"><Truck className="w-4 h-4" /> {locale === 'ar' ? 'الشحن' : 'Shipping'}</span>
+                <span className="text-gray-900 font-medium leading-5 sm:flex-1 sm:min-w-0 sm:ltr:text-right sm:rtl:text-left whitespace-normal break-words hyphens-auto">{shippingVal == null ? (locale === 'ar' ? 'يرجى اختيار عنوان الشحن' : 'Please select a shipping address') : `${nf.format(shippingVal)} ${currency}`}</span>
               </div>
               {discount > 0 && (
-                <div className="flex justify-between"><span className="text-[#2F3E77]">{locale === 'ar' ? 'الخصم' : 'Discount'}</span><span className="text-green-700">- {nf.format(discount)} {currency}</span></div>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:gap-3">
+                  <span className="text-[#2F3E77] leading-5 flex-none">{locale === 'ar' ? 'الخصم' : 'Discount'}</span>
+                  <span className="text-green-700 leading-5 sm:flex-1 sm:min-w-0 sm:ltr:text-right sm:rtl:text-left break-words hyphens-auto">- {nf.format(discount)} {currency}</span>
+                </div>
               )}
-              <div className="border-t pt-3 flex justify-between font-bold text-[#2F3E77]"><span>{locale === 'ar' ? 'الإجمالي' : 'Total'}</span><span>{nf.format(total)} {currency}</span></div>
+              <div className="border-t pt-3 flex flex-col sm:flex-row sm:items-start sm:gap-3 font-bold text-[#2F3E77]">
+                <span className="leading-5 flex-none">{locale === 'ar' ? 'الإجمالي' : 'Total'}</span>
+                <span className="leading-5 sm:flex-1 sm:min-w-0 sm:ltr:text-right sm:rtl:text-left break-words hyphens-auto">{nf.format(total)} {currency}</span>
+              </div>
             </div>
 
             {/* Coupon */}
             <div className="mt-4">
               <label className="text-sm font-medium text-[#2F3E77]">{locale === 'ar' ? 'كود الخصم' : 'Coupon Code'}</label>
-              <div className="flex mt-2">
-                <input value={coupon} onChange={(e)=>setCoupon(e.target.value)} type="text" placeholder={locale === 'ar' ? 'أدخل الكود' : 'Enter coupon code'} className="flex-1 px-3 py-2 border focus:border-[#2F3E77] focus:outline-none rounded-l-none rounded-r-lg text-left placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77]" />
-                <button className="px-4 py-2 border border-green-600 text-green-600 bg-white hover:bg-green-600 hover:text-white rounded-l-lg rounded-r-none flex items-center gap-2 transition-colors" onClick={() => { /* recalculated via state */ }}>
+              {/* Unified bordered group: equal height, prevent overflow. Input 65% / Button 35% on mobile */}
+              <div className="mt-2 overflow-hidden rounded-lg border border-gray-300 flex items-stretch">
+                <input
+                  value={coupon}
+                  onChange={(e)=>setCoupon(e.target.value)}
+                  type="text"
+                  placeholder={locale === 'ar' ? 'أدخل الكود' : 'Enter coupon code'}
+                  className="flex-1 px-3 h-11 border-0 focus:outline-none focus:ring-0 placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77]"
+                />
+                <button
+                  className="shrink-0 min-w-[92px] h-11 px-3 sm:px-4 bg-green-600 text-white sm:bg-white sm:text-green-700 sm:hover:bg-green-600 sm:hover:text-white transition-colors ltr:border-l rtl:border-r border-gray-300 flex items-center justify-center gap-2 font-semibold whitespace-nowrap"
+                  onClick={() => { /* recalculated via state */ }}
+                  aria-label={locale === 'ar' ? 'تطبيق الكوبون' : 'Apply coupon'}
+                >
                   <Tag className="w-4 h-4" /> {locale === 'ar' ? 'تطبيق' : 'Apply'}
                 </button>
               </div>
@@ -251,23 +289,19 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      {/* Add Address Modal */}
       {showAddressForm && (
-        <div className="fixed inset-0 z-50">
+        <div className="fixed inset-0 z-50 overscroll-contain">
           <div className="absolute inset-0 bg-black/40" onClick={() => setShowAddressForm(false)} />
-          <div className="relative z-10 flex items-start justify-center p-4 md:p-8">
-            <div className="w-full max-w-xl bg-white rounded-xl shadow-xl">
-              <div className="flex items-center justify-between px-6 py-4 border-b">
-                <div>
-                  <h3 className="text-lg font-bold text-[#2F3E77]">{locale === 'ar' ? 'إضافة عنوان جديد' : 'Add New Address'}</h3>
-                  <p className="text-sm text-gray-500">{locale === 'ar' ? 'أدخل تفاصيل العنوان لإنشاء عنوان شحن جديد.' : 'Enter your address details below to create a new shipping address.'}</p>
-                </div>
-                <button onClick={() => setShowAddressForm(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+          <div className="relative z-10 flex min-h-screen items-start justify-center p-3 sm:p-4 md:p-8 pt-16 sm:pt-20 md:pt-24 overflow-y-auto">
+            <div className="w-full mx-2 sm:mx-0 max-w-md sm:max-w-lg md:max-w-xl bg-white rounded-xl shadow-xl flex flex-col max-h-[calc(100vh-5rem)] sm:max-h-[calc(100vh-6rem)]">
+              <div className="px-6 py-4 border-b sticky top-0 bg-white z-10">
+                <h3 className="text-base font-semibold text-[#2F3E77]">{locale === 'ar' ? 'إضافة عنوان جديد' : 'Add New Address'}</h3>
+                <p className="text-xs text-gray-500 mt-1">{locale === 'ar' ? 'أدخل تفاصيل العنوان أدناه لإنشاء عنوان شحن جديد.' : 'Enter your address details below to create a new shipping address.'}</p>
               </div>
-              <div className="px-6 py-5 space-y-4">
+              <div className="px-6 py-5 space-y-4 flex-1 overflow-y-auto">
                 <div>
                   <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'الاسم بالكامل' : 'Full Name'}</label>
-                  <input value={form.fullName} onChange={(e)=>setForm({...form, fullName:e.target.value})} type="text" className="w-full mt-1 px-3 py-2 border rounded-lg placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77]" placeholder={locale === 'ar' ? 'الاسم بالكامل' : 'Full Name'} />
+                  <input value={form.fullName} onChange={(e)=>setForm({...form, fullName:e.target.value})} type="text" className="w-full mt-1 h-11 px-3 border border-gray-300 rounded-lg placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77] focus:outline-none focus:ring-2 focus:ring-[#2F3E77]/50" placeholder={locale === 'ar' ? 'الاسم بالكامل' : 'Full Name'} />
                 </div>
                 <div>
                   <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'المنطقة/المحافظة' : 'Area'}</label>
@@ -278,7 +312,7 @@ export default function CheckoutPage() {
                       const [gov, area] = raw.split(',').map((s)=>s?.trim() ?? '');
                       setForm({...form, governorate: gov, city: area});
                     }}
-                    className="w-full mt-1 px-3 py-2 border rounded-lg text-[#2F3E77]"
+                    className="w-full mt-1 h-11 px-3 border border-gray-300 rounded-lg text-[#2F3E77] focus:outline-none focus:ring-2 focus:ring-[#2F3E77]/50"
                   >
                     <option value="">{locale === 'ar' ? 'اختر المنطقة' : 'Select area'}</option>
                     {areaOptions.map((opt) => (
@@ -289,18 +323,18 @@ export default function CheckoutPage() {
                 <div>
                   <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'رقم الهاتف' : 'Phone Number'}</label>
                   <div className="relative mt-1">
-                    <Phone className="w-4 h-4 absolute right-3 top-3 text-gray-400" />
-                    <input value={form.phone} onChange={(e)=>setForm({...form, phone:e.target.value})} type="tel" className="w-full pl-3 pr-9 py-2 border rounded-lg placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77]" placeholder={locale === 'ar' ? 'أدخل رقم الهاتف' : 'Enter phone number'} />
+                    <Phone className="w-4 h-4 absolute ltr:right-3 rtl:left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input value={form.phone} onChange={(e)=>setForm({...form, phone:e.target.value})} type="tel" className="w-full h-11 ltr:pr-9 rtl:pl-9 px-3 border border-gray-300 rounded-lg placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77] focus:outline-none focus:ring-2 focus:ring-[#2F3E77]/50" placeholder={locale === 'ar' ? 'أدخل رقم الهاتف' : 'Enter phone number'} />
                   </div>
                 </div>
                 <div>
                   <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'تفاصيل العنوان' : 'Address Details'}</label>
-                  <textarea value={form.addressLine} onChange={(e)=>setForm({...form, addressLine:e.target.value})} rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77] focus:outline-none focus:ring-2 focus:ring-[#2F3E77]" placeholder={locale === 'ar' ? 'مبنى، شارع، علامة مميزة...' : 'Building, street, landmark...'} />
+                  <textarea value={form.addressLine} onChange={(e)=>setForm({...form, addressLine:e.target.value})} rows={3} className="w-full mt-1 min-h-[88px] px-3 py-2 border border-gray-300 rounded-lg placeholder-[#2F3E77] text-[#2F3E77] caret-[#2F3E77] focus:outline-none focus:ring-2 focus:ring-[#2F3E77]/50" placeholder={locale === 'ar' ? 'مبنى، شارع، علامة مميزة...' : 'Building, street, landmark...'} />
                 </div>
               </div>
-              <div className="px-6 py-4 border-t flex items-center justify-end gap-3">
-                <button onClick={() => setShowAddressForm(false)} className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button>
-                <button onClick={onSubmitAddress} className="px-4 py-2 rounded-lg bg-[#2F3E77] text-white hover:brightness-110">{locale === 'ar' ? 'حفظ العنوان' : 'Save Address'}</button>
+              <div className="px-6 py-4 border-t flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-3 sticky bottom-0 bg-white z-10">
+                <button onClick={() => setShowAddressForm(false)} className="w-full sm:w-auto px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                <button onClick={onSubmitAddress} className="w-full sm:w-auto px-4 py-2 rounded-lg bg-[#2F3E77] text-white hover:brightness-110">{locale === 'ar' ? 'حفظ العنوان' : 'Save Address'}</button>
               </div>
             </div>
           </div>

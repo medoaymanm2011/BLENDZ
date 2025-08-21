@@ -6,7 +6,6 @@ import { Trash2, Plus, Minus } from 'lucide-react';
 import { useMemo } from 'react';
 import Link from 'next/link';
 import { useLocale } from 'next-intl';
-import Image from 'next/image';
 import { useStore } from '@/context/StoreContext';
 import { products as productsData } from '@/data/products';
 
@@ -88,15 +87,29 @@ export default function CartPage() {
               <div className="space-y-4">
                 {lineItems.map((item) => (
                   <div key={item.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="relative w-24 h-24 rounded-lg overflow-hidden bg-gray-50 flex items-center justify-center">
+                    <div className="grid gap-4 grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto] items-center">
+                      <div className="w-24 h-24 min-w-[96px] flex-shrink-0 rounded-lg overflow-hidden bg-white ring-1 ring-gray-200 flex items-center justify-center">
                         {isUrl(item.image) ? (
-                          <Image src={item.image as string} alt={item.name} fill sizes="96px" className="object-contain" />
+                          <picture>
+                            {String(item.image).toLowerCase().endsWith('.avif') && (
+                              <source srcSet={item.image as string} type="image/avif" />
+                            )}
+                            <img
+                              src={String(item.image).toLowerCase().endsWith('.avif') ? '/SHOES/istockphoto-1009996074-612x612.jpg' : (item.image as string)}
+                              alt={item.name}
+                              width={96}
+                              height={96}
+                              className="w-24 h-24 object-contain"
+                              loading="lazy"
+                              decoding="async"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/SHOES/istockphoto-1009996074-612x612.jpg'; }}
+                            />
+                          </picture>
                         ) : (
                           <span className="text-4xl">{item.image ?? '🧸'}</span>
                         )}
                       </div>
-                      <div className="flex-1">
+                      <div className="flex-1 min-w-0">
                         <Link href={`/${locale}/product/${item.slug}`} className="block font-semibold text-gray-800 hover:text-blue-800 line-clamp-2">{item.name}</Link>
                         {/* Placeholder attribute line to mimic screenshot */}
                         <div className="text-xs text-gray-500 mt-1">{locale === 'ar' ? 'اللون: أحمر' : 'Color: Red'}</div>
@@ -108,20 +121,19 @@ export default function CartPage() {
                         </div>
                       </div>
 
-                      {/* Quantity */}
-                      <div className="flex items-center">
-                        <span className="text-sm mr-3 hidden md:inline text-[#2F3E77]">{locale === 'ar' ? 'الكمية' : 'Quantity'}</span>
+                      {/* Controls (right aligned) */}
+                      <div className="col-span-2 sm:col-auto ml-auto flex items-center gap-2 flex-shrink-0 justify-end mt-1 sm:mt-0">
+                        {/* Quantity */}
                         <div className="flex items-center border rounded-lg overflow-hidden border-[#2F3E77]/30">
                           <button onClick={() => updateQuantity(item.id, -1)} className="p-2 hover:bg-[#2F3E77]/5 disabled:opacity-50" disabled={item.quantity<=1}><Minus className="w-4 h-4 text-[#2F3E77]" /></button>
                           <span className="px-4 py-2 min-w-[48px] text-center text-[#2F3E77] font-semibold">{item.quantity}</span>
                           <button onClick={() => updateQuantity(item.id, 1)} className="p-2 hover:bg-[#2F3E77]/5"><Plus className="w-4 h-4 text-[#2F3E77]" /></button>
                         </div>
+                        {/* Remove */}
+                        <button onClick={() => removeItem(item.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" aria-label={locale === 'ar' ? 'حذف' : 'Remove'}>
+                          <Trash2 className="w-5 h-5" />
+                        </button>
                       </div>
-
-                      {/* Remove */}
-                      <button onClick={() => removeItem(item.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" aria-label={locale === 'ar' ? 'حذف' : 'Remove'}>
-                        <Trash2 className="w-5 h-5" />
-                      </button>
                     </div>
                   </div>
                 ))}

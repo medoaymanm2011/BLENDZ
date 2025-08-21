@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useConfirmDialog } from '@/context/ConfirmDialogContext';
+import Portal from '@/components/Portal';
 
 // Admin emails for demo purposes
 const ADMIN_EMAILS = ['admin@blendz.com', 'manager@blendz.com'];
@@ -70,9 +71,22 @@ export default function AccountPage() {
       const raw = localStorage.getItem(USERS_KEY);
       if (!raw) {
         const seed: StoredUser[] = [
-          { name: 'Demo', email: 'demo@blendz.com', password: '12345678', role: 'user' }
+          { name: 'Demo', email: 'demo@blendz.com', password: '12345678', role: 'user', verified: true, verificationCode: null }
         ];
         localStorage.setItem(USERS_KEY, JSON.stringify(seed));
+      } else {
+        // Ensure demo user exists and is verified
+        const users: StoredUser[] = JSON.parse(raw);
+        const idx = users.findIndex(u => u.email?.toLowerCase() === 'demo@blendz.com');
+        if (idx === -1) {
+          users.push({ name: 'Demo', email: 'demo@blendz.com', password: '12345678', role: 'user', verified: true, verificationCode: null });
+          saveUsers(users);
+        } else {
+          // Force verification true for smoother demo
+          users[idx].verified = true;
+          users[idx].verificationCode = null;
+          saveUsers(users);
+        }
       }
     } catch {}
   }, []);
@@ -88,25 +102,28 @@ export default function AccountPage() {
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
-    
-    if (!loginEmail || !loginPassword) {
+
+    const email = loginEmail.trim();
+    const password = loginPassword.trim();
+
+    if (!email || !password) {
       setMessage('يرجى إدخال البريد الإلكتروني وكلمة المرور');
       return;
     }
-    
-    if (!validateEmail(loginEmail)) {
+
+    if (!validateEmail(email)) {
       setMessage('يرجى إدخال بريد إلكتروني صحيح');
       return;
     }
-    
-    if (loginPassword.length < 6) {
+
+    if (password.length < 6) {
       setMessage('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
       return;
     }
 
     // Validate against saved users array
     const users = loadUsers();
-    const found = users.find(u => u.email.toLowerCase() === loginEmail.toLowerCase() && u.password === loginPassword);
+    const found = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
     if (!found) {
       setMessage('بيانات تسجيل الدخول غير صحيحة');
       return;
@@ -132,7 +149,9 @@ export default function AccountPage() {
     localStorage.setItem('vk_user', JSON.stringify(sessionUser));
     setUser(sessionUser);
     setMessage(`تم تسجيل الدخول بنجاح${isAdmin ? ' - مرحباً بك في لوحة الإدارة' : ''}`);
-    
+    // Redirect to home page
+    try { router.push(`/${locale}`); } catch {}
+
     // Clear form
     setLoginEmail('');
     setLoginPassword('');
@@ -250,7 +269,7 @@ export default function AccountPage() {
     <div className="min-h-screen bg-white">
       <Header />
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-7xl mx-0 space-y-6 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto space-y-6 sm:px-6 lg:px-8">
           {user ? (
             <div className="space-y-6">
               {/* Page Title */}
@@ -273,7 +292,13 @@ export default function AccountPage() {
 
               <div className="ltr:pl-6 rtl:pr-6 lg:ltr:pl-8 lg:rtl:pr-8">
                 {message && (
-                  <div className={`mb-2 px-4 py-2 rounded ${message.includes('يرجى') || message.includes('خطأ') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>{message}</div>
+                  <Portal>
+                    <div className="fixed inset-x-0 top-3 pointer-events-none flex justify-center px-2" style={{ zIndex: 2147483647 }}>
+                      <div className={`pointer-events-auto w-full max-w-md px-4 py-2 rounded-md shadow-md ring-1 ${message.includes('يرجى') || message.includes('خطأ') ? 'bg-red-50 ring-red-200 text-red-800' : 'bg-green-50 ring-green-200 text-green-800'}`}>
+                        {message}
+                      </div>
+                    </div>
+                  </Portal>
                 )}
 
                 {/* Profile Information */}
@@ -329,9 +354,13 @@ export default function AccountPage() {
                 {/* Removed segmented toggle buttons for cleaner layout */}
 
                 {message && (
-                  <div className={`mb-4 px-4 py-2 rounded ${message.includes('يرجى') || message.includes('خطأ') || message.includes('ضعيف') || message.includes('غير متطابقة') ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
-                    {message}
-                  </div>
+                  <Portal>
+                    <div className="fixed inset-x-0 top-3 pointer-events-none flex justify-center px-2" style={{ zIndex: 2147483647 }}>
+                      <div className={`pointer-events-auto w-full max-w-md px-4 py-2 rounded-md shadow-md ring-1 ${message.includes('يرجى') || message.includes('خطأ') || message.includes('ضعيف') || message.includes('غير متطابقة') || message.includes('غير صحيحة') ? 'bg-red-50 ring-red-200 text-red-800' : 'bg-green-50 ring-green-200 text-green-800'}`}>
+                        {message}
+                      </div>
+                    </div>
+                  </Portal>
                 )}
 
                 {showVerify ? (

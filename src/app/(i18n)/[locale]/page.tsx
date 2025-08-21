@@ -19,7 +19,7 @@ export default function LocaleHomePage() {
             <Categories />
           </div>
         </div>
-        <div className="mt-10">
+        <div id="home-products" className="mt-10 scroll-mt-24">
           <ProductSections />
         </div>
       </main>

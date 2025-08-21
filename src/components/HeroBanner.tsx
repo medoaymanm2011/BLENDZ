@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
-import LocaleLink from './LocaleLink';
 import { useLocale, useTranslations } from 'next-intl';
 import { getRandomHeroSlides, getDefaultHeroSlides } from '@/data/home';
 
@@ -62,11 +61,17 @@ export default function HeroBanner() {
               <div className="text-center space-y-4">
                 <h2 className="text-3xl md:text-5xl font-extrabold drop-shadow">{t(slide.titleKey)}</h2>
                 <p className="text-lg md:text-2xl opacity-95">{t(slide.subtitleKey)}</p>
-                {slide.href && (
-                  <LocaleLink href={slide.href} className="inline-block bg-white text-gray-900 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
-                    {t(slide.buttonKey)}
-                  </LocaleLink>
-                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const el = document.getElementById('home-products');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    else window.location.hash = '#home-products';
+                  }}
+                  className="inline-block bg-white text-gray-900 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                >
+                  {t(slide.buttonKey)}
+                </button>
               </div>
             </div>
           </div>

@@ -272,51 +272,49 @@ export default function Header() {
 
             {/* Right side: mobile account + quick button, and desktop actions */}
             <div className="flex items-center gap-2">
-              {/* Mobile Account button (shows dropdown like desktop) */}
-              <div className="lg:hidden relative" ref={userMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => { if (!user) { goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description') }); return; } setIsUserMenuOpen(v => !v); }}
-                  className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50 shadow-sm text-black"
-                  aria-haspopup="menu"
-                  aria-expanded={isUserMenuOpen}
-                  aria-label="Account"
-                >
-                  {user ? (
+              {/* Mobile Account button (shows dropdown like desktop) — only when logged in */}
+              {user && (
+                <div className="lg:hidden relative" ref={userMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsUserMenuOpen(v => !v)}
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50 shadow-sm text-black"
+                    aria-haspopup="menu"
+                    aria-expanded={isUserMenuOpen}
+                    aria-label="Account"
+                  >
                     <span className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-blue-50 text-blue-800 font-bold border border-blue-200">
                       {(user.name || user.email || '?').trim().charAt(0).toUpperCase()}
                     </span>
-                  ) : (
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                  )}
-                </button>
-                {user && isUserMenuOpen && (
-                  <div
-                    role="menu"
-                    className={`absolute ${locale === 'ar' ? 'left-0' : 'right-0'} mt-2 w-44 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2 z-[9999]`}
-                  >
-                    <Link href={`/${locale}/account`} className="block px-4 py-2 text-sm text-gray-800 hover:bg-gray-100" onClick={() => setIsUserMenuOpen(false)}>
-                      {t('header.profile')}
-                    </Link>
-                    <Link href={`/${locale}/orders`} className="block px-4 py-2 text-sm text-gray-800 hover:bg-gray-100" onClick={() => setIsUserMenuOpen(false)}>
-                      {t('account.myOrders')}
-                    </Link>
-                    <button
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                      onClick={() => {
-                        try {
-                          localStorage.removeItem('vk_user');
-                          window.dispatchEvent(new Event('vk_user_updated'));
-                        } catch {}
-                        setIsUserMenuOpen(false);
-                        router.push(`/${locale}`);
-                      }}
+                  </button>
+                  {isUserMenuOpen && (
+                    <div
+                      role="menu"
+                      className={`absolute ${locale === 'ar' ? 'left-0' : 'right-0'} mt-2 w-44 rounded-xl bg-white shadow-lg ring-1 ring-black/5 py-2 z-[9999]`}
                     >
-                      {t('header.logout')}
-                    </button>
-                  </div>
-                )}
-              </div>
+                      <Link href={`/${locale}/account`} className="block px-4 py-2 text-sm text-gray-800 hover:bg-gray-100" onClick={() => setIsUserMenuOpen(false)}>
+                        {t('header.profile')}
+                      </Link>
+                      <Link href={`/${locale}/orders`} className="block px-4 py-2 text-sm text-gray-800 hover:bg-gray-100" onClick={() => setIsUserMenuOpen(false)}>
+                        {t('account.myOrders')}
+                      </Link>
+                      <button
+                        className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          try {
+                            localStorage.removeItem('vk_user');
+                            window.dispatchEvent(new Event('vk_user_updated'));
+                          } catch {}
+                          setIsUserMenuOpen(false);
+                          router.push(`/${locale}`);
+                        }}
+                      >
+                        {t('header.logout')}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Mobile quick menu button (right side) */}
               <button
                 type="button"

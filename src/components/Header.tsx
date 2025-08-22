@@ -33,6 +33,14 @@ export default function Header() {
     try { router.prefetch(path); } catch {}
   };
 
+  // Prefetch common routes on mount/locale change for instant nav
+  useEffect(() => {
+    prefetch(`/${locale}`);
+    prefetch(`/${locale}/account`);
+    prefetch(`/${locale}/cart`);
+    prefetch(`/${locale}/wishlist`);
+  }, [locale]);
+
   // Use live categories data for dropdown to match site exactly
   const dropdownCategories = categoriesData;
   const categoryOrder = [
@@ -53,15 +61,19 @@ export default function Header() {
     return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
   });
 
-  useEffect(() => {
-    // Load user from localStorage
+  // Helper to fetch current user from server (JWT cookie)
+  const refreshUser = async () => {
     try {
-      const stored = localStorage.getItem('vk_user');
-      if (stored) {
-        setUser(JSON.parse(stored));
-      }
-    } catch {}
-  }, []);
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await res.json();
+      setUser(res.ok && data?.user ? { name: data.user.name, email: data.user.email, role: data.user.role } : null);
+    } catch {
+      setUser(null);
+    }
+  };
+
+  // Initial fetch
+  useEffect(() => { refreshUser(); }, []);
 
   // Reset mobile account dropdown when the quick drawer closes
   useEffect(() => {
@@ -81,19 +93,26 @@ export default function Header() {
     }
   }, [isQuickOpen]);
 
+  // When user menu opens, prefetch profile/orders/admin
   useEffect(() => {
-    const syncUser = () => {
-      try {
-        const stored = localStorage.getItem('vk_user');
-        setUser(stored ? JSON.parse(stored) : null);
-      } catch {}
-    };
-    window.addEventListener('storage', syncUser);
-    window.addEventListener('vk_user_updated', syncUser as EventListener);
-    return () => {
-      window.removeEventListener('storage', syncUser);
-      window.removeEventListener('vk_user_updated', syncUser as EventListener);
-    };
+    if (!isUserMenuOpen) return;
+    prefetch(`/${locale}/account`);
+    prefetch(`/${locale}/orders`);
+    if (user?.role === 'admin') prefetch(`/${locale}/admin`);
+  }, [isUserMenuOpen, user, locale]);
+
+  // When categories dropdown opens, prefetch top category pages
+  useEffect(() => {
+    if (!catsOpen) return;
+    try {
+      orderedCategories.slice(0, 8).forEach((c) => prefetch(`/${locale}/category/${c.slug}`));
+    } catch {}
+  }, [catsOpen, locale]);
+
+  useEffect(() => {
+    const onAuthChanged = () => { refreshUser(); };
+    window.addEventListener('auth_changed', onAuthChanged as EventListener);
+    return () => { window.removeEventListener('auth_changed', onAuthChanged as EventListener); };
   }, []);
 
   // Close user menu on outside click
@@ -111,7 +130,7 @@ export default function Header() {
 
   const otherLocale = locale === 'ar' ? 'en' : 'ar';
   const cartCount = store.cart.reduce((sum, item) => sum + item.qty, 0);
-  const goToLogin = (opts?: { title?: string; description?: string }) => {
+  const goToLogin = (opts?: { title?: string; description?: string; redirectTo?: string }) => {
     if (opts?.title || opts?.description) {
       showToastCustom({
         title: opts.title,
@@ -120,6 +139,10 @@ export default function Header() {
         duration: 1500,
       });
     }
+    try {
+      const target = opts?.redirectTo || pathname || `/${locale}`;
+      sessionStorage.setItem('post_login_redirect', target);
+    } catch {}
     router.push(`/${locale}/account`);
   };
   const switchHref = (() => {
@@ -209,12 +232,14 @@ export default function Header() {
                     </Link>
                     <button
                       className="flex items-center justify-between w-full px-4 py-3 rounded-lg border border-red-100 bg-white hover:bg-red-50"
-                      onClick={() => {
+                      onClick={async () => {
+                        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
                         try {
-                          localStorage.removeItem('vk_user');
-                          window.dispatchEvent(new Event('vk_user_updated'));
+                          sessionStorage.removeItem('last_login_password');
+                          window.dispatchEvent(new Event('auth_changed'));
                         } catch {}
                         setIsQuickOpen(false);
+                        router.replace(`/${locale}`);
                       }}
                     >
                       <span className="text-red-600">{t('header.logout')}</span>
@@ -300,13 +325,11 @@ export default function Header() {
                       </Link>
                       <button
                         className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                        onClick={() => {
-                          try {
-                            localStorage.removeItem('vk_user');
-                            window.dispatchEvent(new Event('vk_user_updated'));
-                          } catch {}
+                        onClick={async () => {
+                          try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+                          window.dispatchEvent(new Event('auth_changed'));
                           setIsUserMenuOpen(false);
-                          router.push(`/${locale}`);
+                          router.replace(`/${locale}`);
                         }}
                       >
                         {t('header.logout')}
@@ -339,7 +362,7 @@ export default function Header() {
               </button>
 
               <Link prefetch href={`/${locale}/wishlist`} onMouseEnter={() => prefetch(`/${locale}/wishlist`)}
-                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description') }); } }}
+                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description'), redirectTo: `/${locale}/wishlist` }); } }}
                 className="text-gray-700 hover:text-blue-700 inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-transparent hover:bg-gray-100 shadow-sm">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -383,13 +406,14 @@ export default function Header() {
                     </Link>
                     <button
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                      onClick={() => {
+                      onClick={async () => {
+                        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
                         try {
-                          localStorage.removeItem('vk_user');
-                          window.dispatchEvent(new Event('vk_user_updated'));
+                          sessionStorage.removeItem('last_login_password');
+                          window.dispatchEvent(new Event('auth_changed'));
                         } catch {}
                         setIsUserMenuOpen(false);
-                        router.push(`/${locale}`);
+                        router.replace(`/${locale}`);
                       }}
                     >
                       {t('header.logout')}
@@ -399,7 +423,7 @@ export default function Header() {
               </div>
 
               <Link prefetch href={`/${locale}/cart`} onMouseEnter={() => prefetch(`/${locale}/cart`)}
-                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description') }); } }}
+                onClick={(e) => { if (!user) { e.preventDefault(); goToLogin({ title: t('auth.loginRequired.title'), description: t('auth.loginRequired.description'), redirectTo: `/${locale}/cart` }); } }}
                 className="text-gray-700 hover:text-blue-700 relative inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-transparent hover:bg-gray-100 shadow-sm">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" />

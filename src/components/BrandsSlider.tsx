@@ -1,13 +1,50 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import LocaleLink from './LocaleLink';
 import Image from 'next/image';
-import { brands } from '@/data/brands';
+import { brands as fallbackBrands } from '@/data/brands';
+
+type UiBrand = {
+  id: string | number;
+  name: string;
+  slug: string;
+  image?: string;
+};
 
 export default function BrandsSlider() {
   const t = useTranslations();
   const locale = useLocale();
+  const [items, setItems] = useState<UiBrand[] | null>(null);
+
+  const staticItems = useMemo<UiBrand[]>(
+    () => fallbackBrands.map((b) => ({ id: b.id, name: b.name, slug: b.slug, image: b.image })),
+    []
+  );
+
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch('/api/brands', { signal: ac.signal, cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        const apiItems: UiBrand[] = (data?.brands ?? []).map((b: any) => ({
+          id: b._id ?? b.id,
+          name: b.name,
+          slug: b.slug,
+          image: b.image,
+        }));
+        setItems(apiItems.length ? apiItems : staticItems);
+      } catch {
+        setItems(staticItems);
+      }
+    })();
+    return () => ac.abort();
+  }, [staticItems]);
+
+  const list = items ?? staticItems;
 
   return (
     <section className="bg-white py-10">
@@ -32,7 +69,7 @@ export default function BrandsSlider() {
 
         {/* Cards grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-          {brands.map((brand) => (
+          {list.map((brand) => (
             <LocaleLink
               key={brand.id}
               href={`/brands#${brand.slug}`}

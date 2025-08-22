@@ -5,10 +5,27 @@ import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
 import { getRandomHeroSlides, getDefaultHeroSlides } from '@/data/home';
 
+type UiSlide = {
+  id: number;
+  image: string;
+  // i18n keys (static fallback)
+  titleKey?: string;
+  subtitleKey?: string;
+  buttonKey?: string;
+  // direct text (from API)
+  titleText?: string;
+  subtitleText?: string;
+  buttonText?: string;
+  // CTA
+  ctaType?: 'none' | 'scroll' | 'link';
+  ctaTarget?: string | null;
+  href?: string; // used for legacy link CTA
+};
+
 export default function HeroBanner() {
   const [currentSlide, setCurrentSlide] = useState(0);
   // Deterministic initial slides for SSR/CSR parity
-  const [slides, setSlides] = useState(getDefaultHeroSlides(5));
+  const [slides, setSlides] = useState<UiSlide[]>(getDefaultHeroSlides(5));
   const t = useTranslations();
   const locale = useLocale();
   const isRTL = locale === 'ar';
@@ -16,6 +33,27 @@ export default function HeroBanner() {
   useEffect(() => {
     // Re-pick a new random set on mount (client-only)
     setSlides(getRandomHeroSlides(5));
+    // Try to fetch dynamic slides from API (MongoDB). If available, map to UiSlide shape.
+    (async () => {
+      try {
+        const res = await fetch('/api/slides', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const apiSlides: UiSlide[] = (data.slides || []).map((s: any, idx: number) => ({
+          id: idx + 1,
+          image: s.imageUrl,
+          titleText: s.title,
+          subtitleText: s.subtitle,
+          buttonText: s.ctaText,
+          ctaType: s.ctaType,
+          ctaTarget: s.ctaTarget ?? null,
+          href: s.ctaType === 'link' ? s.ctaTarget : undefined,
+        }));
+        if (apiSlides.length > 0) setSlides(apiSlides);
+      } catch {
+        // ignore, keep fallback
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -49,7 +87,7 @@ export default function HeroBanner() {
             <div className="absolute inset-0">
               <Image
                 src={slide.image}
-                alt={t(slide.titleKey)}
+                alt={slide.titleText ?? (slide.titleKey ? t(slide.titleKey) : 'Slide image')}
                 fill
                 sizes="100vw"
                 className="object-cover"
@@ -59,19 +97,36 @@ export default function HeroBanner() {
             </div>
             <div className="relative z-10 h-full flex items-center justify-center text-white p-6">
               <div className="text-center space-y-4">
-                <h2 className="text-3xl md:text-5xl font-extrabold drop-shadow">{t(slide.titleKey)}</h2>
-                <p className="text-lg md:text-2xl opacity-95">{t(slide.subtitleKey)}</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const el = document.getElementById('home-products');
-                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    else window.location.hash = '#home-products';
-                  }}
-                  className="inline-block bg-white text-gray-900 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-                >
-                  {t(slide.buttonKey)}
-                </button>
+                <h2 className="text-3xl md:text-5xl font-extrabold drop-shadow">{slide.titleText ?? (slide.titleKey ? t(slide.titleKey) : '')}</h2>
+                <p className="text-lg md:text-2xl opacity-95">{slide.subtitleText ?? (slide.subtitleKey ? t(slide.subtitleKey) : '')}</p>
+                {(slide.ctaType ?? 'scroll') === 'scroll' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = (slide.ctaTarget as string) || '#home-products';
+                      const id = target.startsWith('#') ? target.slice(1) : target;
+                      const el = document.getElementById(id);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      else window.location.hash = `#${id}`;
+                    }}
+                    className="inline-block bg-white text-gray-900 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                  >
+                    {slide.buttonText ?? (slide.buttonKey ? t(slide.buttonKey) : 'Shop Now')}
+                  </button>
+                )}
+                {(slide.ctaType ?? 'scroll') === 'link' && slide.ctaTarget && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const target = slide.ctaTarget as string;
+                      const href = target.startsWith('/') ? `/${locale}${target}` : target;
+                      window.location.href = href;
+                    }}
+                    className="inline-block bg-white text-gray-900 px-6 py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
+                  >
+                    {slide.buttonText ?? (slide.buttonKey ? t(slide.buttonKey) : 'Shop Now')}
+                  </button>
+                )}
               </div>
             </div>
           </div>

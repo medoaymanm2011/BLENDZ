@@ -1,0 +1,388 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import CloudinaryUploader from '@/components/CloudinaryUploader';
+
+interface ProductImage { url: string; alt?: string }
+interface Product {
+  _id?: string;
+  name: string;
+  slug: string;
+  brandId?: string | null;
+  categoryId?: string | null;
+  sku?: string | null;
+  color?: string | null;
+  price: number;
+  salePrice?: number | null;
+  stock: number;
+  description?: string;
+  isFeatured?: boolean;
+  images?: ProductImage[];
+  sectionTypes?: ('featured' | 'sale' | 'new' | 'bestseller' | 'recommended')[];
+  sectionSlugs?: string[];
+}
+
+interface HomeSection { _id: string; slug: string; type: 'featured'|'sale'|'new'|'bestseller'|'recommended'|'custom_query'; titleEn?: string; titleAr?: string; filters?: any }
+
+interface Brand { _id: string; name: string }
+interface Category { _id: string; name: string }
+
+function slugify(v: string) {
+  return v.toString().trim().toLowerCase()
+    .replace(/[^a-z0-9\u0600-\u06FF\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+export default function AdminProductsPage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [homeSections, setHomeSections] = useState<HomeSection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [img, setImg] = useState('');
+  const [form, setForm] = useState<Product>({ name: '', slug: '', price: 0, salePrice: null, stock: 0, images: [], sku: null, color: null, sectionTypes: [], sectionSlugs: [] });
+  const [discountPct, setDiscountPct] = useState<string>('');
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
+  const router = useRouter();
+  const pathname = usePathname();
+  const locale = useMemo(() => {
+    if (!pathname) return '';
+    const seg = pathname.split('/').filter(Boolean)[0];
+    return seg || '';
+  }, [pathname]);
+  const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN as string | undefined;
+
+  async function load() {
+    try {
+      const [pRes, bRes, cRes] = await Promise.all([
+        fetch('/api/products', { cache: 'no-store', credentials: 'include' }),
+        fetch('/api/brands', { cache: 'no-store', credentials: 'include' }),
+        fetch('/api/categories', { cache: 'no-store', credentials: 'include' }),
+      ]);
+      // fetch admin home sections with admin token
+      const hsRes = await fetch('/api/admin/home-sections', { cache: 'no-store', credentials: 'include', headers: { ...(ADMIN_TOKEN ? { 'x-admin-token': ADMIN_TOKEN } : {}) } });
+      const [pData, bData, cData, hsData] = await Promise.all([pRes.json(), bRes.json(), cRes.json(), hsRes.json()]);
+      setProducts(pData.products || []);
+      setBrands(bData.brands || []);
+      setCategories(cData.categories || []);
+      setHomeSections(Array.isArray(hsData.sections) ? hsData.sections : []);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // Admin auth guard
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const meRes = await fetch('/api/auth/me', { credentials: 'include' });
+        const me = await meRes.json();
+        if (!cancelled && me?.user?.role !== 'admin') {
+          const dest = locale ? `/${locale}/account` : '/account';
+          router.replace(dest);
+          return;
+        }
+        if (!cancelled) await load();
+      } catch (e) {
+        console.error(e);
+        const dest = locale ? `/${locale}/account` : '/account';
+        if (!cancelled) router.replace(dest);
+      } finally {
+        if (!cancelled) setAuthChecking(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locale]);
+
+  function addImage() {
+    if (!img) return;
+    setForm((f) => ({ ...f, images: [...(f.images || []), { url: img }] }));
+    setImg('');
+  }
+
+  function removeImage(idx: number) {
+    setForm((f) => ({ ...f, images: (f.images || []).filter((_, i) => i !== idx) }));
+  }
+
+  async function onCreate(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(ADMIN_TOKEN ? { 'x-admin-token': ADMIN_TOKEN } : {}),
+        },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error('Create failed');
+      setForm({ name: '', slug: '', price: 0, salePrice: null, stock: 0, images: [], sku: null, color: null, sectionTypes: [], sectionSlugs: [] });
+      setDiscountPct('');
+      await load();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function onDelete(id?: string) {
+    if (!id) return;
+    try {
+      await fetch(`/api/products/${id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+        headers: {
+          ...(ADMIN_TOKEN ? { 'x-admin-token': ADMIN_TOKEN } : {}),
+        },
+      });
+      await load();
+    } catch (e) { console.error(e); }
+  }
+
+  if (authChecking) {
+    return (
+      <div className="px-4 py-12">
+        <div className="text-center text-gray-600">Checking permissions...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-gray-900">
+      <div className="px-1 py-2 space-y-8">
+        <h1 className="text-2xl font-bold">Admin • Products</h1>
+
+        <form onSubmit={onCreate} className="grid md:grid-cols-6 gap-4 bg-white p-4 rounded-xl shadow">
+          <input
+            value={form.name}
+            onChange={(e)=>{
+              const name = e.target.value;
+              setForm((f)=> ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }));
+            }}
+            placeholder="Name"
+            className="input input-bordered w-full p-2 rounded border border-gray-300"
+          />
+          <input
+            value={form.slug}
+            onChange={(e)=>{ setSlugTouched(true); setForm({ ...form, slug: slugify(e.target.value) }); }}
+            onFocus={()=> setSlugTouched(true)}
+            placeholder="Slug"
+            className="input input-bordered w-full p-2 rounded border border-gray-300"
+          />
+          <select value={form.brandId ?? ''} onChange={(e)=>setForm({ ...form, brandId: e.target.value || null })} className="input input-bordered w-full p-2 rounded border border-gray-300">
+            <option value="">Brand (optional)</option>
+            {brands.map(b=> (<option key={b._id} value={b._id}>{b.name}</option>))}
+          </select>
+          <select value={form.categoryId ?? ''} onChange={(e)=>setForm({ ...form, categoryId: e.target.value || null })} className="input input-bordered w-full p-2 rounded border border-gray-300">
+            <option value="">Category</option>
+            {categories.map(c=> (<option key={c._id} value={c._id}>{c.name}</option>))}
+          </select>
+          <input value={form.sku ?? ''} onChange={(e)=>setForm({ ...form, sku: e.target.value || null })} placeholder="SKU (optional)" className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          <input value={form.color ?? ''} onChange={(e)=>setForm({ ...form, color: e.target.value || null })} placeholder="Color (e.g., Brown) (optional)" className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-500 mb-1">Price</span>
+            <input value={form.price} onChange={(e)=>{
+              const price = Number(e.target.value) || 0;
+              setForm((f)=>{
+                // if discountPct set, recompute salePrice from pct
+                if (discountPct !== '') {
+                  const pct = Math.max(0, Math.min(100, Number(discountPct) || 0));
+                  const sp = +(price * (1 - pct/100)).toFixed(2);
+                  return { ...f, price, salePrice: sp };
+                }
+                return { ...f, price };
+              });
+            }} type="number" step="0.01" placeholder="Price" className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-500 mb-1">Sale Price (optional)</span>
+            <input value={form.salePrice ?? ''} onChange={(e)=>{
+              const v = e.target.value;
+              const sp = v === '' ? null : (Number(v) || 0);
+              setForm({ ...form, salePrice: sp });
+              // update discount % based on price
+              if (v === '' || sp == null) {
+                setDiscountPct('');
+              } else {
+                const pct = form.price > 0 ? Math.max(0, Math.min(100, 100 - (sp / form.price) * 100)) : 0;
+                setDiscountPct(pct.toFixed(0));
+              }
+            }} type="number" step="0.01" placeholder="Sale Price (optional)" className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-500 mb-1">Discount %</span>
+            <div className="flex items-center gap-2">
+              <input value={discountPct} onChange={(e)=>{
+                const raw = e.target.value;
+                // allow empty to clear
+                setDiscountPct(raw);
+                const pct = raw === '' ? null : Math.max(0, Math.min(100, Number(raw) || 0));
+                setForm((f)=>{
+                  if (pct === null) return { ...f, salePrice: null };
+                  const sp = +(f.price * (1 - pct/100)).toFixed(2);
+                  return { ...f, salePrice: sp };
+                });
+              }} type="number" step="1" min={0} max={100} placeholder="Discount %" className="input input-bordered w-full p-2 rounded border border-gray-300" />
+              <button type="button" onClick={()=>{ setDiscountPct(''); setForm((f)=>({ ...f, salePrice: null })); }} className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200">Clear</button>
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-xs text-gray-500 mb-1">Stock</span>
+            <input value={form.stock} onChange={(e)=>setForm({ ...form, stock: Number(e.target.value) || 0 })} type="number" placeholder="Stock" className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          </div>
+          <input value={img} onChange={(e)=>setImg(e.target.value)} placeholder="Image URL" className="md:col-span-3 input input-bordered w-full p-2 rounded border border-gray-300" />
+          <button type="button" onClick={addImage} className="md:col-span-1 bg-gray-100 hover:bg-gray-200 rounded px-3 py-2">Add</button>
+          <div className="md:col-span-2">
+            <CloudinaryUploader
+              folder="products"
+              buttonText="Upload to Cloudinary"
+              buttonClassName="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2F3E77] text-white hover:brightness-95 cursor-pointer w-full justify-center"
+              onUploaded={(url)=> setForm((f)=> ({ ...f, images: [...(f.images||[]), { url }] }))}
+            />
+          </div>
+          <textarea value={form.description || ''} onChange={(e)=>setForm({ ...form, description: e.target.value })} placeholder="Description" className="md:col-span-6 input input-bordered w-full p-2 rounded border border-gray-300 min-h-24" />
+          <label className="md:col-span-2 inline-flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={!!form.isFeatured} onChange={(e)=>setForm({ ...form, isFeatured: e.target.checked })} />
+            Featured
+          </label>
+          <div className="md:col-span-4">
+            <div className="text-xs text-gray-500 mb-1">Homepage Sections (optional)</div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {(['featured','sale','new','bestseller','recommended'] as const).map(st => (
+                <label key={st} className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={!!form.sectionTypes?.includes(st)}
+                    onChange={(e)=>{
+                      setForm(f=>{
+                        const curr = new Set(f.sectionTypes || []);
+                        if (e.target.checked) curr.add(st); else curr.delete(st);
+                        return { ...f, sectionTypes: Array.from(curr) as Product['sectionTypes'] };
+                      });
+                    }}
+                  />
+                  {st}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="md:col-span-6">
+            <div className="text-xs text-gray-500 mb-1">Assign to Specific Home Sections (auto: includes custom ones)</div>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {homeSections.map((s)=>{
+                const label = s.filters?.customTypeName || s.titleEn || s.slug;
+                const slug = s.slug;
+                const checked = !!form.sectionSlugs?.includes(slug);
+                return (
+                  <label key={s._id} className="inline-flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e)=>{
+                        setForm(f=>{
+                          const curr = new Set(f.sectionSlugs || []);
+                          if (e.target.checked) curr.add(slug); else curr.delete(slug);
+                          return { ...f, sectionSlugs: Array.from(curr) };
+                        });
+                      }}
+                    />
+                    {label} <span className="text-[10px] text-gray-400">/{slug}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <button disabled={loading} type="submit" className="md:col-span-4 bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">{loading ? 'Saving...' : 'Create Product'}</button>
+        </form>
+
+        {/* Live preview of product card */}
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-2">Preview</h2>
+          <div className="bg-white p-4 rounded-xl shadow inline-block">
+            <div className="w-56">
+              <div className="relative rounded-lg overflow-hidden bg-gray-100 aspect-square flex items-center justify-center">
+                {form.images && form.images[0]?.url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.images[0].url} alt={form.name} className="object-cover w-full h-full" />
+                ) : (
+                  <div className="text-gray-400">No image</div>
+                )}
+                {form.salePrice != null && form.salePrice < form.price ? (
+                  <span className="absolute top-2 right-2 text-[10px] bg-rose-500 text-white px-2 py-0.5 rounded-full">
+                    -{Math.round(((form.price - (form.salePrice||0)) / (form.price||1)) * 100)}%
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 space-y-1">
+                <div className="text-[11px] text-gray-600">
+                  {brands.find(b=>b._id===form.brandId)?.name || 'Brand'}
+                </div>
+                <div className="font-semibold line-clamp-2 text-sm">{form.name || 'Product name'}</div>
+                {form.color ? (
+                  <div className="flex items-center gap-2 text-xs mt-1">
+                    <span className="text-gray-600">Color</span>
+                    <span className="px-2 py-0.5 rounded bg-gray-100">{form.color}</span>
+                  </div>
+                ) : null}
+                <div className="flex items-center gap-2">
+                  <div className="font-bold">{form.salePrice != null && form.salePrice < form.price ? form.salePrice.toFixed(2) : form.price.toFixed(2)} EGP</div>
+                  {form.salePrice != null && form.salePrice < form.price ? (
+                    <div className="text-xs text-gray-400 line-through">{form.price.toFixed(2)} EGP</div>
+                  ) : null}
+                </div>
+                <div className="text-xs text-emerald-700 mt-1">In Stock - {form.stock || 0} available</div>
+                <button className="w-full bg-[#2F3E77] text-white text-sm rounded px-3 py-2 mt-2">Add to Cart</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 mt-6">
+          {products.map((p) => (
+            <div key={p._id} className="bg-white rounded-xl p-4 shadow flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {p.images && p.images[0]?.url ? (<img src={p.images[0].url} alt={p.name} className="w-12 h-12 object-cover rounded" />) : (<div className="w-12 h-12 bg-gray-200 rounded" />)}
+                <div>
+                  <div className="font-semibold">{p.name}</div>
+                  <div className="text-xs text-gray-500">/{p.slug}</div>
+                  {p.sectionSlugs && p.sectionSlugs.length ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {p.sectionSlugs.map(sl => (
+                        <span key={sl} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">{sl}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                  {p.sectionTypes && p.sectionTypes.length ? (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {p.sectionTypes.map(st => (
+                        <span key={st} className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{st}</span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex items-center gap-4 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-900 font-medium">{(p.salePrice != null && p.salePrice < p.price ? p.salePrice : p.price).toFixed(2)} EGP</span>
+                  {p.salePrice != null && p.salePrice < p.price ? (
+                    <span className="text-gray-400 line-through">{p.price.toFixed(2)} EGP</span>
+                  ) : null}
+                </div>
+                <button onClick={()=>onDelete(p._id)} className="text-red-600 hover:underline">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}

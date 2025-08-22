@@ -32,6 +32,8 @@ const saveUsers = (users: StoredUser[]) => {
 export default function AccountPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [user, setUser] = useState<{ name: string; email: string; role?: string } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [redirecting, setRedirecting] = useState(false);
   const locale = useLocale();
   const router = useRouter();
 
@@ -47,6 +49,7 @@ export default function AccountPage() {
   const [rememberMe, setRememberMe] = useState(false);
 
   const [message, setMessage] = useState<string | null>(null);
+  const [alert, setAlert] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [showVerify, setShowVerify] = useState(false);
@@ -56,13 +59,30 @@ export default function AccountPage() {
   const genCode = () => Math.floor(100000 + Math.random() * 900000).toString();
 
   useEffect(() => {
-    // Load user from localStorage if present
-    try {
-      const stored = localStorage.getItem('vk_user');
-      if (stored) {
-        setUser(JSON.parse(stored));
+    // Load session from backend
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        const data = await res.json();
+        if (res.ok && data?.user) {
+          setUser({ name: data.user.name, email: data.user.email, role: data.user.role });
+          // If admin, send to admin dashboard directly
+          if (data.user.role === 'admin') {
+            try {
+              setRedirecting(true);
+              router.replace(`/${locale}/admin`);
+              return;
+            } catch {}
+          }
+        } else {
+          setUser(null);
+        }
+      } catch {
+        setUser(null);
+      } finally {
+        setLoading(false);
       }
-    } catch {}
+    })();
   }, []);
 
   // Seed a demo credential if none exist
@@ -99,132 +119,117 @@ export default function AccountPage() {
     return emailRegex.test(email);
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
+    setAlert(null);
 
     const email = loginEmail.trim();
     const password = loginPassword.trim();
 
-    if (!email || !password) {
-      setMessage('يرجى إدخال البريد الإلكتروني وكلمة المرور');
-      return;
-    }
+    if (!email || !password) { setAlert({ text: locale === 'ar' ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter email and password', type: 'error' }); return; }
+    if (!validateEmail(email)) { setAlert({ text: locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email', type: 'error' }); return; }
+    if (password.length < 6) { setAlert({ text: locale === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters', type: 'error' }); return; }
 
-    if (!validateEmail(email)) {
-      setMessage('يرجى إدخال بريد إلكتروني صحيح');
-      return;
-    }
-
-    if (password.length < 6) {
-      setMessage('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
-      return;
-    }
-
-    // Validate against saved users array
-    const users = loadUsers();
-    const found = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password);
-    if (!found) {
-      setMessage('بيانات تسجيل الدخول غير صحيحة');
-      return;
-    }
-    // Block login until email verified
-    if (!found.verified) {
-      // Ensure a code exists
-      let code = found.verificationCode;
-      if (!code) {
-        code = genCode();
-        found.verificationCode = code;
-        saveUsers(users);
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (res.status === 403) {
+        setAlert({ text: locale === 'ar' ? 'البريد الإلكتروني غير مُفعل. يرجى تأكيد البريد أولاً.' : 'Email not verified. Please verify your email first.', type: 'error' });
+        // take user to verify page with prefilled email
+        router.push(`/${locale}/verify?email=${encodeURIComponent(email)}`);
+        return;
       }
-      try { console.log('Verification code (login):', code, 'for', found.email); } catch {}
-      setMessage('يرجى تفعيل بريدك الإلكتروني أولاً. أدخل رمز التحقق المرسل إلى بريدك.');
-      setShowVerify(true);
-      setVerifyEmail(found.email);
-      return;
+      if (!res.ok) { setAlert({ text: data?.error || (locale === 'ar' ? 'بيانات تسجيل الدخول غير صحيحة' : 'Invalid login credentials'), type: 'error' }); return; }
+      const me = data;
+      if (me?.user) {
+        try {
+          // Notify app to refresh user from server
+          window.dispatchEvent(new Event('auth_changed'));
+          // Store last login password temporarily for prefilling Current Password (masked)
+          sessionStorage.setItem('last_login_password', password);
+        } catch {}
+        setMessage('تم تسجيل الدخول بنجاح');
+        setRedirecting(true);
+        setLoading(true);
+        // Prefer stored redirect if present
+        try {
+          const stored = sessionStorage.getItem('post_login_redirect');
+          if (stored) {
+            sessionStorage.removeItem('post_login_redirect');
+            router.replace(stored);
+            return;
+          }
+        } catch {}
+        if (me.user.role === 'admin') {
+          router.replace(`/${locale}/admin`);
+        } else {
+          router.replace(`/${locale}`);
+        }
+      }
+    } catch (err: any) {
+      setAlert({ text: err?.message || (locale === 'ar' ? 'خطأ في تسجيل الدخول' : 'Login error'), type: 'error' });
+    } finally {
+      setLoginEmail('');
+      setLoginPassword('');
     }
-    const isAdmin = ADMIN_EMAILS.includes(found.email.toLowerCase());
-    const role = isAdmin ? 'admin' : (found.role || 'user');
-    const sessionUser = { name: found.name || (found.email.split('@')[0] || 'المستخدم'), email: found.email, role };
-    localStorage.setItem('vk_user', JSON.stringify(sessionUser));
-    setUser(sessionUser);
-    setMessage(`تم تسجيل الدخول بنجاح${isAdmin ? ' - مرحباً بك في لوحة الإدارة' : ''}`);
-    // Redirect to home page
-    try { router.push(`/${locale}`); } catch {}
-
-    // Clear form
-    setLoginEmail('');
-    setLoginPassword('');
   };
 
-  const handleRegisterSubmit = (e: React.FormEvent) => {
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setMessage(null);
+    setAlert(null);
     
-    if (!firstName || !registerEmail || !registerPassword || !confirmPassword) {
-      setMessage('يرجى إكمال جميع الحقول');
-      return;
-    }
-    
-    if (!validateEmail(registerEmail)) {
-      setMessage('يرجى إدخال بريد إلكتروني صحيح');
-      return;
-    }
-    
-    if (registerPassword.length < 8) {
-      setMessage('كلمة المرور يجب أن تكون 8 أحرف على الأقل');
-      return;
-    }
-    
-    if (registerPassword !== confirmPassword) {
-      setMessage('كلمات المرور غير متطابقة');
-      return;
-    }
+    if (!firstName || !registerEmail || !registerPassword || !confirmPassword) { setAlert({ text: locale === 'ar' ? 'يرجى إكمال جميع الحقول' : 'Please complete all fields', type: 'error' }); return; }
+    if (!validateEmail(registerEmail)) { setAlert({ text: locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email', type: 'error' }); return; }
+    if (registerPassword.length < 8) { setAlert({ text: locale === 'ar' ? 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' : 'Password must be at least 8 characters', type: 'error' }); return; }
+    if (registerPassword !== confirmPassword) { setAlert({ text: locale === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match', type: 'error' }); return; }
 
-    // Check duplicates and save into users array
-    const users = loadUsers();
-    if (users.some(u => u.email.toLowerCase() === registerEmail.toLowerCase())) {
-      setMessage('هذا البريد مسجل بالفعل');
-      return;
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: firstName.trim(), email: registerEmail.trim(), password: registerPassword })
+      });
+      const data = await res.json();
+      if (res.status === 409) {
+        setAlert({ text: locale === 'ar' ? 'هذا البريد مسجّل ومُفعل بالفعل. يرجى تسجيل الدخول.' : 'This email is already registered and verified. Please log in.', type: 'error' });
+        setIsLogin(true);
+        setLoginEmail(registerEmail.trim());
+        return;
+      }
+      if (!res.ok) { setAlert({ text: data?.error || (locale === 'ar' ? 'تعذر إنشاء الحساب' : 'Failed to create account'), type: 'error' }); return; }
+      // Redirect to verify page to confirm email before login
+      router.push(`/${locale}/verify?email=${encodeURIComponent(registerEmail.trim())}`);
+      setFirstName(''); setRegisterEmail(''); setRegisterPassword(''); setConfirmPassword('');
+    } catch (err: any) {
+      setAlert({ text: err?.message || (locale === 'ar' ? 'خطأ أثناء إنشاء الحساب' : 'An error occurred while creating the account'), type: 'error' });
     }
-    const isAdmin = ADMIN_EMAILS.includes(registerEmail.toLowerCase());
-    const role = isAdmin ? 'admin' : 'user';
-    const code = genCode();
-    const newStored: StoredUser = { name: `${firstName}`.trim(), email: registerEmail, password: registerPassword, role, verified: false, verificationCode: code };
-    users.push(newStored);
-    saveUsers(users);
-    try { console.log('Verification code (register):', code, 'for', registerEmail); } catch {}
-
-    // Show verify step, do NOT log the user in yet
-    setShowVerify(true);
-    setVerifyEmail(registerEmail);
-    setIsLogin(true);
-    setMessage('تم إنشاء الحساب. تحقق من بريدك الإلكتروني وأدخل رمز التحقق للمتابعة.');
-    
-    // Clear form
-    setFirstName('');
-    setRegisterEmail('');
-    setRegisterPassword('');
-    setConfirmPassword('');
   };
 
   const handleVerifySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!verifyEmail || !verifyCode) {
-      setMessage('يرجى إدخال رمز التحقق');
+      setMessage(locale === 'ar' ? 'يرجى إدخال رمز التحقق' : 'Please enter the verification code');
       return;
     }
     const users = loadUsers();
     const idx = users.findIndex(u => u.email.toLowerCase() === verifyEmail.toLowerCase());
-    if (idx === -1) { setMessage('البريد غير موجود'); return; }
+    if (idx === -1) { setMessage(locale === 'ar' ? 'البريد غير موجود' : 'Email not found'); return; }
     if (users[idx].verificationCode !== verifyCode) {
-      setMessage('رمز غير صحيح');
+      setMessage(locale === 'ar' ? 'رمز غير صحيح' : 'Invalid code');
       return;
     }
     users[idx].verified = true;
     users[idx].verificationCode = null;
     saveUsers(users);
-    setMessage('تم التحقق من البريد بنجاح. يمكنك تسجيل الدخول الآن.');
+    setMessage(locale === 'ar' ? 'تم التحقق من البريد بنجاح. يمكنك تسجيل الدخول الآن.' : 'Email verified successfully. You can log in now.');
     setShowVerify(false);
     setIsLogin(true);
     setLoginEmail(verifyEmail);
@@ -240,24 +245,34 @@ export default function AccountPage() {
     users[idx].verificationCode = code;
     saveUsers(users);
     try { console.log('Verification code (resend):', code, 'for', verifyEmail); } catch {}
-    setMessage('تم إرسال رمز تحقق جديد إلى بريدك.');
+    setMessage(locale === 'ar' ? 'تم إرسال رمز تحقق جديد إلى بريدك.' : 'A new verification code has been sent to your email.');
   };
 
   const handlePasswordReset = (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetEmail || !validateEmail(resetEmail)) {
-      setMessage('يرجى إدخال بريد إلكتروني صحيح');
+      setMessage(locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email');
       return;
     }
-    setMessage('تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني');
+    setMessage(locale === 'ar' ? 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني' : 'Password reset link has been sent to your email');
     setShowPasswordReset(false);
     setResetEmail('');
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('vk_user');
-    setUser(null);
-    setMessage('تم تسجيل الخروج');
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      if (!res.ok) throw new Error('Logout failed');
+      setUser(null);
+      try {
+        sessionStorage.removeItem('last_login_password');
+        window.dispatchEvent(new Event('auth_changed'));
+      } catch {}
+      setMessage(locale === 'ar' ? 'تم تسجيل الخروج' : 'Logged out successfully');
+      router.replace(`/${locale}`);
+    } catch (e: any) {
+      setMessage(e?.message || (locale === 'ar' ? 'تعذر تسجيل الخروج' : 'Logout failed'));
+    }
   };
 
   // Trigger header re-render when user state changes
@@ -304,10 +319,6 @@ export default function AccountPage() {
                 {/* Profile Information */}
                 <ProfileInfoCard user={user} onSave={(updated) => {
                   const merged = { ...user!, ...updated };
-                  try {
-                    localStorage.setItem('vk_user', JSON.stringify(merged));
-                    window.dispatchEvent(new Event('vk_user_updated'));
-                  } catch {}
                   setUser(merged);
                   setMessage(locale === 'ar' ? 'تم حفظ الملف الشخصي' : 'Profile saved');
                 }} />
@@ -338,29 +349,26 @@ export default function AccountPage() {
                 }} />
 
                 {/* Delete Account */}
-                <DeleteCard onDelete={() => {
-                  try {
-                    localStorage.removeItem('vk_user');
-                    window.dispatchEvent(new Event('vk_user_updated'));
-                  } catch {}
-                  setUser(null);
+                <DeleteCard onDelete={async () => {
+                  // Just clear session (no backend delete endpoint yet)
+                  await handleLogout();
                   router.push(`/${locale}`);
                 }} />
               </div>
+            </div>
+          ) : loading ? (
+            <div className="mx-auto max-w-md w-full min-h-[80vh] grid place-items-center">
+              <div className="text-gray-500">Loading...</div>
             </div>
           ) : (
             <div className="mx-auto max-w-md w-full min-h-[80vh] grid place-items-center">
               <div className="w-full mx-auto">
                 {/* Removed segmented toggle buttons for cleaner layout */}
 
-                {message && (
-                  <Portal>
-                    <div className="fixed inset-x-0 top-3 pointer-events-none flex justify-center px-2" style={{ zIndex: 2147483647 }}>
-                      <div className={`pointer-events-auto w-full max-w-md px-4 py-2 rounded-md shadow-md ring-1 ${message.includes('يرجى') || message.includes('خطأ') || message.includes('ضعيف') || message.includes('غير متطابقة') || message.includes('غير صحيحة') ? 'bg-red-50 ring-red-200 text-red-800' : 'bg-green-50 ring-green-200 text-green-800'}`}>
-                        {message}
-                      </div>
-                    </div>
-                  </Portal>
+                {alert && (
+                  <div className={`mb-4 rounded-md px-4 py-2 text-sm ${alert.type === 'error' ? 'bg-red-50 ring-1 ring-red-200 text-red-800' : 'bg-green-50 ring-1 ring-green-200 text-green-800'}`}>
+                    {alert.text}
+                  </div>
                 )}
 
                 {showVerify ? (
@@ -409,21 +417,6 @@ export default function AccountPage() {
                       <p className="text-sm text-gray-600">{locale === 'ar' ? 'أدخل بياناتك للوصول إلى حسابك' : 'Enter your information to access your account'}</p>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <button type="button" className="inline-flex items-center justify-center gap-2 py-2.5 rounded-md bg-[#1877F2] text-white hover:opacity-95 shadow-sm">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7h-2.3V12h2.3V9.7c0-2.3 1.4-3.6 3.5-3.6 1 0 2 .1 2 .1v2.2h-1.1c-1.1 0-1.5.7-1.5 1.4V12h2.6l-.4 2.9h-2.2v7A10 10 0 0 0 22 12z"/></svg>
-                        {locale === 'ar' ? 'فيسبوك' : 'Facebook'}
-                      </button>
-                      <button type="button" className="inline-flex items-center justify-center gap-2 py-2.5 rounded-md bg-[#EA4335] text-white hover:opacity-95 shadow-sm">
-                        <svg className="w-4 h-4" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12 c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657 C33.202,6.053,28.791,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,19.004,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657 C33.202,6.053,28.791,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.191-5.238C29.211,35.091,26.715,36,24,36 c-5.202,0-9.619-3.317-11.274-7.956l-6.49,5.004C8.57,39.556,15.737,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.793,2.237-2.231,4.215-4.097,5.744l-6.191-5.238 C35.137,35.256,44,28,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-                        Google
-                      </button>
-                    </div>
-
-                    <div className="relative text-center">
-                      <span className="px-2 text-xs text-gray-500 bg-white relative z-10">{locale === 'ar' ? 'أو المتابعة عبر البريد' : 'OR CONTINUE WITH'}</span>
-                      <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-gray-200" />
-                    </div>
 
                     <div>
                       <label className="text-sm font-medium block mb-1 text-gray-800">{locale === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
@@ -516,21 +509,6 @@ export default function AccountPage() {
 
                     <button type="submit" className="w-full bg-[#2F3E77] hover:brightness-95 text-white py-3 rounded-md shadow-md transition-colors">{locale === 'ar' ? 'تسجيل' : 'Register'}</button>
 
-                    <div className="relative text-center">
-                      <span className="px-2 text-xs text-gray-500 bg-white relative z-10">{locale === 'ar' ? 'أو المتابعة عبر' : 'OR CONTINUE WITH'}</span>
-                      <div className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-px bg-gray-200" />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <button type="button" className="inline-flex items-center justify-center gap-2 py-2.5 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.6 9.9v-7h-2.3V12h2.3V9.7c0-2.3 1.4-3.6 3.5-3.6 1 0 2 .1 2 .1v2.2h-1.1c-1.1 0-1.5.7-1.5 1.4V12h2.6l-.4 2.9h-2.2v7A10 10 0 0 0 22 12z"/></svg>
-                        Facebook
-                      </button>
-                      <button type="button" className="inline-flex items-center justify-center gap-2 py-2.5 rounded-md bg-gray-100 text-gray-800 hover:bg-gray-200">
-                        <svg className="w-4 h-4" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12 c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657 C33.202,6.053,28.791,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,19.004,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657 C33.202,6.053,28.791,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.191-5.238C29.211,35.091,26.715,36,24,36 c-5.202,0-9.619-3.317-11.274-7.956l-6.49,5.004C8.57,39.556,15.737,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.793,2.237-2.231,4.215-4.097,5.744l-6.191-5.238 C35.137,35.256,44,28,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
-                        Google
-                      </button>
-                    </div>
 
                     <div className="text-center text-sm text-gray-600">
                       {locale === 'ar' ? 'لديك حساب بالفعل؟' : 'Already registered?'}{' '}
@@ -600,6 +578,28 @@ function PasswordCard({ onSaved, currentPassword = '' }: { onSaved: () => void; 
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  // On mount, if sessionStorage has last login password, use it once then clear it
+  useEffect(() => {
+    try {
+      const tmp = sessionStorage.getItem('last_login_password');
+      if (tmp) {
+        setCurrent(tmp);
+      }
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep sessionStorage in sync with current field during the session
+  useEffect(() => {
+    try {
+      if (current) {
+        sessionStorage.setItem('last_login_password', current);
+      } else {
+        sessionStorage.removeItem('last_login_password');
+      }
+    } catch {}
+  }, [current]);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -607,6 +607,7 @@ function PasswordCard({ onSaved, currentPassword = '' }: { onSaved: () => void; 
     if (next.length < 8) { setError(locale === 'ar' ? 'كلمة مرورة لا تقل عن 8 أحرف' : 'Password must be at least 8 characters'); return; }
     if (next !== confirm) { setError(locale === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match'); return; }
     onSaved();
+    try { sessionStorage.removeItem('last_login_password'); } catch {}
     setCurrent(''); setNext(''); setConfirm('');
   };
 
@@ -621,15 +622,33 @@ function PasswordCard({ onSaved, currentPassword = '' }: { onSaved: () => void; 
       <form onSubmit={submit} className="mt-6 space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-800 mb-1">{locale === 'ar' ? 'كلمة المرور الحالية' : 'Current Password'}</label>
-          <input type="password" value={current} onChange={(e)=>setCurrent(e.target.value)} className="w-full px-3 py-2 rounded-md border border-gray-200 text-black placeholder:text-transparent focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-yellow-50" />
+          <input
+            type="password"
+            value={current}
+            onChange={(e)=>setCurrent(e.target.value)}
+            placeholder={locale === 'ar' ? 'كلمة المرور الحالية' : 'Current Password'}
+            className="w-full px-3 py-2 rounded-md border border-gray-200 text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-yellow-50"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-800 mb-1">{locale === 'ar' ? 'كلمة المرور الجديدة' : 'New Password'}</label>
-          <input type="password" value={next} onChange={(e)=>setNext(e.target.value)} className="w-full px-3 py-2 rounded-md border border-gray-200 text-black placeholder:text-transparent focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          <input
+            type="password"
+            value={next}
+            onChange={(e)=>setNext(e.target.value)}
+            placeholder={locale === 'ar' ? 'كلمة المرور الجديدة' : 'New Password'}
+            className="w-full px-3 py-2 rounded-md border border-gray-200 text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-800 mb-1">{locale === 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password'}</label>
-          <input type="password" value={confirm} onChange={(e)=>setConfirm(e.target.value)} className="w-full px-3 py-2 rounded-md border border-gray-200 text-black placeholder:text-transparent focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+          <input
+            type="password"
+            value={confirm}
+            onChange={(e)=>setConfirm(e.target.value)}
+            placeholder={locale === 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password'}
+            className="w-full px-3 py-2 rounded-md border border-gray-200 text-black focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
         </div>
         <div className="flex items-center gap-4">
         <button type="submit" className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium bg-[#2F3E77] text-white shadow hover:brightness-95 h-9 px-4 py-2">

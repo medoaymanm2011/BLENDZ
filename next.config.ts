@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
       {
         protocol: 'https',
         hostname: 'via.placeholder.com',
+      },
+      // Cloudinary delivery
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
       }
     ],
     // Avoid server-side fetching of remote images in development to bypass DNS/network issues

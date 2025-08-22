@@ -2,31 +2,37 @@
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
-export type CartItem = { productId: number; qty: number };
+export type ProductId = string | number;
+export type CartItem = { productId: ProductId; qty: number };
 export type StoreState = {
   cart: CartItem[];
-  wishlist: number[]; // product ids
+  wishlist: ProductId[]; // product ids
 };
 
 export type StoreActions = {
-  addToCart: (productId: number, qty?: number) => void;
-  removeFromCart: (productId: number) => void;
+  addToCart: (productId: ProductId, qty?: number) => void;
+  removeFromCart: (productId: ProductId) => void;
   clearCart: () => void;
-  addToWishlist: (productId: number) => void;
-  removeFromWishlist: (productId: number) => void;
-  isInWishlist: (productId: number) => boolean;
-  cartQty: (productId: number) => number;
+  addToWishlist: (productId: ProductId) => void;
+  removeFromWishlist: (productId: ProductId) => void;
+  isInWishlist: (productId: ProductId) => boolean;
+  cartQty: (productId: ProductId) => number;
 };
 
 const defaultState: StoreState = { cart: [], wishlist: [] };
 
 const StoreContext = createContext<(StoreState & StoreActions) | null>(null);
 
-const STORAGE_KEY = 'vk-store';
+const BASE_KEY = 'vk-store';
 
-function loadState(): StoreState {
+function makeKey(email: string | null | undefined) {
+  const id = (email || 'guest').toLowerCase();
+  return `${BASE_KEY}:${id}`;
+}
+
+function loadStateForKey(key: string): StoreState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return defaultState;
     const parsed = JSON.parse(raw);
     if (
@@ -42,22 +48,56 @@ function loadState(): StoreState {
   }
 }
 
-function saveState(state: StoreState) {
+function saveStateForKey(key: string, state: StoreState) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    localStorage.setItem(key, JSON.stringify(state));
   } catch {}
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<StoreState>(defaultState);
+  const [email, setEmail] = useState<string | null>(null);
+  const [storageKey, setStorageKey] = useState<string>(() => makeKey(null));
 
   useEffect(() => {
-    setState(loadState());
+    // Fetch current user to determine per-user storage key
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' });
+        const data = await res.json();
+        const userEmail: string | null = res.ok && data?.user?.email ? data.user.email : null;
+        if (cancelled) return;
+        setEmail(userEmail);
+        const nextKey = makeKey(userEmail);
+
+        // Migrate guest -> user on first login (only if user store empty)
+        const guestKey = makeKey(null);
+        const userState = loadStateForKey(nextKey);
+        const guestState = loadStateForKey(guestKey);
+        if ((userEmail && userState.cart.length === 0 && userState.wishlist.length === 0)
+          && (guestState.cart.length > 0 || guestState.wishlist.length > 0)) {
+          saveStateForKey(nextKey, guestState);
+          try { localStorage.removeItem(guestKey); } catch {}
+          setState(guestState);
+        } else {
+          setState(userState);
+        }
+        setStorageKey(nextKey);
+      } catch {
+        // fallback to guest storage
+        const guestKey = makeKey(null);
+        setStorageKey(guestKey);
+        setState(loadStateForKey(guestKey));
+      }
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    saveState(state);
-  }, [state]);
+    // Persist to the active user's key
+    saveStateForKey(storageKey, state);
+  }, [state, storageKey]);
 
   const actions = useMemo<StoreActions>(() => ({
     addToCart: (productId, qty = 1) => {

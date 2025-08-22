@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import LocaleLink from './LocaleLink';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
@@ -9,9 +9,41 @@ import { useToast } from '@/context/ToastContext';
 import { products as productsData, type Product as ProductData } from '@/data/products';
 import { brands as brandsData } from '@/data/brands';
 
+type SectionType = 'featured' | 'sale' | 'new' | 'bestseller' | 'recommended' | 'custom_query';
+type HomeSection = {
+  _id: string;
+  titleAr: string;
+  titleEn: string;
+  slug: string;
+  type: SectionType;
+  filters?: { tags?: string[]; brandSlugs?: string[] } | Record<string, any>;
+  sort?: 'newest' | 'topSelling' | 'priceAsc' | 'priceDesc' | 'custom';
+  limit?: number;
+};
+
 export default function ProductSections() {
   const locale = useLocale();
   const t = useTranslations();
+  const [sections, setSections] = useState<HomeSection[] | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/home-sections?locale=${locale}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error('failed');
+        const data = await res.json();
+        if (cancelled) return;
+        setSections(Array.isArray(data?.sections) ? data.sections : []);
+      } catch {
+        if (!cancelled) setSections([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [locale]);
 
   const getFilteredProducts = () => {
     const featured = productsData.filter(p => p.tags?.includes('featured'));
@@ -22,11 +54,76 @@ export default function ProductSections() {
     return Array.from({ length: repeats })
       .flatMap(() => featured)
       .slice(0, minCount);
-  };
+  }
 
-  const prettifyBrand = (slug: string) => brandsData.find(b => b.slug === slug)?.name ?? slug.replace(/-/g, ' ').toLowerCase();
+  // If dynamic sections are available, render them; otherwise fallback to static layout
+  if (!loading && sections && sections.length > 0) {
+    return (
+      <>
+        {sections.map((s) => (
+          <section key={s._id} className="py-4 md:py-10 bg-white">
+            <div className="container mx-auto px-4">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-blue-800 text-white shadow-sm">
+                    <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <circle cx="12" cy="9" r="3.5" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 13.5L8 20l4-2 4 2-1.5-6.5" />
+                    </svg>
+                  </span>
+                  <h2 className="text-2xl md:text-3xl font-extrabold text-gray-800">{locale === 'ar' ? s.titleAr : s.titleEn}</h2>
+                </div>
+                <LocaleLink href={`/sections/${s.slug}`} className="text-sm font-semibold text-blue-700 hover:text-blue-800 inline-flex items-center gap-1">
+                  {t('products.viewAll')}
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
+                </LocaleLink>
+              </div>
+              <div className="relative">
+                <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2">
+                  {getProductsForSection(s).map((product, i) => (
+                    <div key={`${s.slug}-${product.id}-${i}`} className="snap-start">
+                      <ProductCard product={product} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        ))}
+      </>
+    );
+  }
 
-  const getSaleProducts = () => {
+  function getCustomProducts(filters?: HomeSection['filters'], limit = 12) {
+    let items = productsData.slice();
+    const f = (filters || {}) as any;
+    if (Array.isArray(f.tags) && f.tags.length) {
+      items = items.filter((p) => p.tags?.some((t: string) => f.tags.includes(t)));
+    }
+    if (Array.isArray(f.brandSlugs) && f.brandSlugs.length) {
+      items = items.filter((p) => f.brandSlugs.includes(p.brandSlug));
+    }
+    return (items.length ? items : productsData).slice(0, limit);
+  }
+
+  function getProductsForSection(s: HomeSection) {
+    const lim = s.limit ?? 12;
+    switch (s.type) {
+      case 'featured': return getFilteredProducts().slice(0, lim);
+      case 'sale': return getSaleProducts().slice(0, lim);
+      case 'new': return getNewProducts().slice(0, lim);
+      case 'bestseller': return getBestSellerProducts().slice(0, lim);
+      case 'recommended': return getRecommendedProducts().slice(0, lim);
+      case 'custom_query': return getCustomProducts(s.filters, lim);
+      default: return productsData.slice(0, lim);
+    }
+  }
+
+  function prettifyBrand(slug: string) {
+    return brandsData.find(b => b.slug === slug)?.name ?? slug.replace(/-/g, ' ').toLowerCase();
+  }
+
+  function getSaleProducts() {
     const sale = productsData.filter(p => p.tags?.includes('sale'));
     if (sale.length === 0) return productsData.slice(0, 12);
     const minCount = 12;
@@ -35,9 +132,9 @@ export default function ProductSections() {
     return Array.from({ length: repeats })
       .flatMap(() => sale)
       .slice(0, minCount);
-  };
+  }
 
-  const getNewProducts = () => {
+  function getNewProducts() {
     const fresh = productsData.filter(p => p.tags?.includes('new'));
     if (fresh.length === 0) return productsData.slice(0, 12);
     const minCount = 12;
@@ -46,9 +143,9 @@ export default function ProductSections() {
     return Array.from({ length: repeats })
       .flatMap(() => fresh)
       .slice(0, minCount);
-  };
+  }
 
-  const getBestSellerProducts = () => {
+  function getBestSellerProducts() {
     const best = productsData.filter(p => p.tags?.includes('bestseller'));
     if (best.length === 0) return productsData.slice(0, 12);
     const minCount = 12;
@@ -57,9 +154,9 @@ export default function ProductSections() {
     return Array.from({ length: repeats })
       .flatMap(() => best)
       .slice(0, minCount);
-  };
+  }
 
-  const getRecommendedProducts = () => {
+  function getRecommendedProducts() {
     const rec = productsData.filter(p => p.tags?.includes('recommended'));
     if (rec.length === 0) return productsData.slice(0, 12);
     const minCount = 12;
@@ -68,9 +165,9 @@ export default function ProductSections() {
     return Array.from({ length: repeats })
       .flatMap(() => rec)
       .slice(0, minCount);
-  };
+  }
 
-  const ProductCard = ({ product }: { product: ProductData }) => {
+  function ProductCard({ product }: { product: ProductData }) {
     const { addToWishlist, removeFromWishlist, isInWishlist, addToCart } = useStore();
     const { showToast } = useToast();
     const [imgLoaded, setImgLoaded] = useState(

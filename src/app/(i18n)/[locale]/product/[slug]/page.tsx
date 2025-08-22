@@ -24,6 +24,20 @@ export default function ProductPage() {
   const router = useRouter();
   const { slug } = useParams<{ slug: string }>();
 
+  type DbProduct = {
+    _id: string;
+    name: string;
+    slug: string;
+    price: number;
+    salePrice?: number | null;
+    stock: number;
+    brandId?: string | null;
+    categoryId?: string | null;
+    images?: { url: string }[];
+  };
+  const [dbProduct, setDbProduct] = useState<DbProduct | null>(null);
+  const [loadingDb, setLoadingDb] = useState(true);
+
   // Legacy numeric id redirect support (e.g., /product/123 -> /product/some-slug)
   useEffect(() => {
     if (typeof slug === 'string' && /^\d+$/.test(slug)) {
@@ -34,12 +48,74 @@ export default function ProductPage() {
     }
   }, [slug, router, locale]);
 
+  // Fetch DB product by slug
+  useEffect(() => {
+    let active = true;
+    setLoadingDb(true);
+    fetch(`/api/products/${slug}`, { cache: 'no-store' })
+      .then(async (res) => {
+        if (!active) return;
+        if (res.ok) {
+          const data = await res.json();
+          setDbProduct(data.product);
+        } else {
+          setDbProduct(null);
+        }
+      })
+      .catch(() => active && setDbProduct(null))
+      .finally(() => active && setLoadingDb(false));
+    return () => { active = false; };
+  }, [slug]);
+
   const product: ProductData | undefined = useMemo(
     () => (typeof slug === 'string' ? productsData.find((p) => p.slug === slug) : undefined),
     [slug]
   );
 
-  if (!product) {
+  // While loading DB and no mock product, show a lightweight loading UI
+  if (loadingDb && !dbProduct && !product) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-12">
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-600">Loading...</div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Build a unified view model from DB or mock product to render the SAME layout
+  const isDb = !!dbProduct;
+  const view = isDb && !loadingDb && dbProduct
+    ? {
+        id: dbProduct._id,
+        title: dbProduct.name,
+        brandLabel: dbProduct.brandId || '',
+        price: dbProduct.salePrice != null && dbProduct.salePrice < dbProduct.price ? dbProduct.salePrice : dbProduct.price,
+        originalPrice: dbProduct.salePrice != null && dbProduct.salePrice < dbProduct.price ? dbProduct.price : undefined,
+        discount: dbProduct.salePrice != null && dbProduct.salePrice < dbProduct.price
+          ? Math.round(((dbProduct.price - (dbProduct.salePrice || 0)) / (dbProduct.price || 1)) * 100)
+          : undefined,
+        images: (dbProduct.images || []).map(im => im.url).filter(Boolean) as string[],
+        categorySlug: undefined as string | undefined,
+        stock: dbProduct.stock,
+      }
+    : product
+    ? {
+        id: product.id,
+        title: locale === 'ar' ? product.name.ar : product.name.en,
+        brandLabel: (brandsData.find(b => b.slug === product.brandSlug)?.name ?? product.brandSlug) || '',
+        price: product.price,
+        originalPrice: product.originalPrice,
+        discount: product.discount,
+        images: (product.images || []) as string[],
+        categorySlug: product.categorySlugs?.[0],
+        stock: 5,
+      }
+    : null;
+
+  if (!product && !loadingDb && !dbProduct) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -55,16 +131,20 @@ export default function ProductPage() {
     );
   }
 
-  const title = locale === 'ar' ? product.name.ar : product.name.en;
-  const brandName = brandsData.find(b => b.slug === product.brandSlug)?.name ?? product.brandSlug;
+  // At this point, if we reach here we either have a product view or already handled not-found/loading.
+  if (!view) {
+    // This is a safety guard to satisfy TypeScript; in practice previous branches cover this.
+    return null;
+  }
+
+  const title = view.title;
+  const brandName = view.brandLabel;
   const isUrl = (s?: string) => !!s && /^(https?:)?\//.test(s);
-  const inWishlist = store.isInWishlist(product.id);
+  const inWishlist = store.isInWishlist(view.id);
   const currency = locale === 'ar' ? 'جنية' : 'EGP';
-  const categoryObj = categoriesData.find(c => c.slug === (product.categorySlugs[0] || ''));
-  const categoryName = categoryObj ? (locale === 'ar' ? categoryObj.name.ar : categoryObj.name.en) : (product.categorySlugs[0] || 'All');
-  const colorOptions: string[] = (product as any).colors && Array.isArray((product as any).colors) && (product as any).colors.length > 0
-    ? (product as any).colors
-    : [locale === 'ar' ? 'أحمر' : 'Red'];
+  const categoryObj = categoriesData.find(c => c.slug === (view.categorySlug || ''));
+  const categoryName = categoryObj ? (locale === 'ar' ? categoryObj.name.ar : categoryObj.name.en) : (view.categorySlug || 'All');
+  const colorOptions: string[] = [locale === 'ar' ? 'أحمر' : 'Red'];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -73,7 +153,7 @@ export default function ProductPage() {
         <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
           <Link href={`/${locale}`} className="hover:text-purple-600">{locale === 'ar' ? 'الرئيسية' : 'Home'}</Link>
           <span>/</span>
-          <Link href={`/${locale}/category/${encodeURIComponent(product.categorySlugs[0] || 'all')}`} className="hover:text-purple-600">
+          <Link href={`/${locale}/category/${encodeURIComponent(view.categorySlug || 'all')}`} className="hover:text-purple-600">
             {categoryName}
           </Link>
           <span>/</span>
@@ -86,24 +166,24 @@ export default function ProductPage() {
             <div>
               <div className="relative w-full aspect-square bg-gray-100 rounded-xl overflow-hidden flex items-center justify-center">
                 {/* discount badge */}
-                {product.discount ? (
-                  <span className="absolute top-3 right-3 z-10 bg-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">-{product.discount}%</span>
+                {view.discount ? (
+                  <span className="absolute top-3 right-3 z-10 bg-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">-{view.discount}%</span>
                 ) : null}
-                {isUrl(product.images?.[selected]) ? (
+                {isUrl(view.images?.[selected]) ? (
                   <Image
-                    src={product.images[selected]}
+                    src={view.images[selected]}
                     alt={title}
                     fill
                     sizes="(max-width: 1024px) 100vw, 50vw"
                     className="object-contain"
                   />
                 ) : (
-                  <span className="text-7xl">{product.images?.[selected] ?? '🧸'}</span>
+                  <span className="text-7xl">{view.images?.[selected] ?? '🧸'}</span>
                 )}
               </div>
-              {product.images?.length ? (
+              {view.images?.length ? (
                 <div className="grid grid-cols-4 gap-2 mt-3">
-                  {product.images.map((img, idx) => (
+                  {view.images.map((img, idx) => (
                     <button
                       key={idx}
                       onClick={() => setSelected(idx)}
@@ -123,24 +203,26 @@ export default function ProductPage() {
             {/* Info */}
             <div className="space-y-4">
               <div className="flex items-center gap-2">
-                <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full">{brandName}</span>
-                <span className="ml-auto inline-flex items-center gap-2 text-xs text-[#2B356D] bg-white px-2.5 py-1 rounded-full border border-[#2B356D]/30">{locale === 'ar' ? 'في المخزون - 5 قطع' : 'In Stock - 5 available'}</span>
+                {brandName && (
+                  <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full">{brandName}</span>
+                )}
+                <span className="ml-auto inline-flex items-center gap-2 text-xs text-[#2B356D] bg-white px-2.5 py-1 rounded-full border border-[#2B356D]/30">{locale === 'ar' ? `في المخزون - ${isDb && dbProduct ? dbProduct.stock : 5} قطع` : `In Stock - ${isDb && dbProduct ? dbProduct.stock : 5} available`}</span>
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
 
               <div className="flex items-center gap-3">
-                <div className="text-[#2B356D] text-2xl font-extrabold">{product.price} {currency}</div>
-                {product.originalPrice && (
-                  <div className="text-gray-500 line-through">{product.originalPrice} {currency}</div>
+                <div className="text-[#2B356D] text-2xl font-extrabold">{view.price} {currency}</div>
+                {view.originalPrice && (
+                  <div className="text-gray-500 line-through">{view.originalPrice} {currency}</div>
                 )}
-                {product.discount ? (
-                  <span className="text-xs font-bold bg-rose-100 text-rose-700 px-2 py-1 rounded-full">{locale === 'ar' ? `${product.discount}% خصم` : `${product.discount}% OFF`}</span>
+                {view.discount ? (
+                  <span className="text-xs font-bold bg-rose-100 text-rose-700 px-2 py-1 rounded-full">{locale === 'ar' ? `${view.discount}% خصم` : `${view.discount}% OFF`}</span>
                 ) : null}
               </div>
 
               {/* Category line under price */}
-              {product.categorySlugs?.[0] && (
+              {view.categorySlug && (
                 <div className="text-sm text-gray-500">{locale === 'ar' ? 'الفئة:' : 'Category:'} <span className="text-gray-700 font-medium">{categoryName}</span></div>
               )}
 
@@ -177,7 +259,7 @@ export default function ProductPage() {
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => { store.addToCart(product.id, qty); showToast(locale === 'ar' ? 'تمت الإضافة إلى السلة' : 'Added to cart'); }}
+                  onClick={() => { store.addToCart(view.id, qty); showToast(locale === 'ar' ? 'تمت الإضافة إلى السلة' : 'Added to cart'); }}
                   className="flex-1 bg-[#2b356d] text-white px-6 py-3 rounded-md hover:bg-[#222a59] shadow-sm"
                 >
                   {locale === 'ar' ? 'إضافة إلى السلة' : 'Add to Cart'}
@@ -186,10 +268,10 @@ export default function ProductPage() {
                   aria-label="Wishlist"
                   onClick={() => {
                     if (inWishlist) {
-                      store.removeFromWishlist(product.id);
+                      store.removeFromWishlist(view.id);
                       showToast(locale === 'ar' ? 'تمت الإزالة من المفضلة' : 'Removed from wishlist');
                     } else {
-                      store.addToWishlist(product.id);
+                      store.addToWishlist(view.id);
                       showToast(locale === 'ar' ? 'أُضيف إلى المفضلة' : 'Added to wishlist');
                     }
                   }}
@@ -219,7 +301,7 @@ export default function ProductPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {productsData
-              .filter(p => p.id !== product.id && (p.categorySlugs.some(c => product.categorySlugs.includes(c)) || p.brandSlug === product.brandSlug))
+              .filter(p => !isDb && product ? p.id !== product.id && (p.categorySlugs.some(c => product.categorySlugs.includes(c)) || p.brandSlug === product.brandSlug) : true)
               .slice(0, 6)
               .map(p => (
                 <BrandProductCard key={p.id} product={p} />

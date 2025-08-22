@@ -7,11 +7,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 
-// localStorage keys used by checkout flow
+// localStorage keys used by checkout flow (fallback when not logged in)
 const LAST_ORDER_KEY = 'lastOrder';
 const ORDERS_KEY = 'vk_orders';
 
-type OrderItem = { productId: number; qty: number };
+type OrderItem = { productId: string; qty: number };
 interface StoredOrder {
   id: string;
   date: string;
@@ -33,26 +33,56 @@ export default function OrdersPage() {
   const nf = useMemo(() => new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-US', { maximumFractionDigits: 2 }), [locale]);
 
   useEffect(() => {
-    try {
-      const listRaw = localStorage.getItem(ORDERS_KEY);
-      const lastRaw = localStorage.getItem(LAST_ORDER_KEY);
-
-      let list: StoredOrder[] = [];
-      if (listRaw) {
-        list = JSON.parse(listRaw) as StoredOrder[];
+    let active = true;
+    // Try fetching from server for logged-in user
+    (async () => {
+      try {
+        const res = await fetch('/api/my/orders', { cache: 'no-store', credentials: 'include' });
+        if (res.ok) {
+          const data = await res.json();
+          const serverOrders = Array.isArray(data?.orders) ? data.orders : [];
+          const mapped: StoredOrder[] = serverOrders.map((o: any) => ({
+            id: String(o._id),
+            date: o.createdAt || o.updatedAt || new Date().toISOString(),
+            items: (o.items || []).map((it: any) => ({ productId: String(it.productId), qty: Number(it.qty || 0) })),
+            subtotal: Number(o?.totals?.subtotal || 0),
+            shipping: Number(o?.totals?.shipping || 0),
+            total: Number(o?.totals?.total || 0),
+            paymentMethod: String(o?.payment?.method || 'cod'),
+            status: o?.status,
+            paymentStatus: o?.payment?.status,
+            currency: String(o?.totals?.currency || 'EGP'),
+          }));
+          // sort desc
+          mapped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          if (active) setOrders(mapped);
+          return;
+        }
+      } catch {
+        // ignore and fallback to localStorage
       }
-      if (lastRaw) {
-        const last = JSON.parse(lastRaw) as StoredOrder;
-        // ensure lastOrder is included if not already present
-        if (!list.find((o) => o.id === last.id)) list.push(last);
-      }
 
-      // sort by date desc
-      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setOrders(list);
-    } catch {
-      setOrders([]);
-    }
+      // Fallback: load from localStorage (guest / offline)
+      try {
+        const listRaw = localStorage.getItem(ORDERS_KEY);
+        const lastRaw = localStorage.getItem(LAST_ORDER_KEY);
+
+        let list: StoredOrder[] = [];
+        if (listRaw) {
+          list = JSON.parse(listRaw) as StoredOrder[];
+        }
+        if (lastRaw) {
+          const last = JSON.parse(lastRaw) as StoredOrder;
+          if (!list.find((o) => o.id === last.id)) list.push(last);
+        }
+
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        if (active) setOrders(list);
+      } catch {
+        if (active) setOrders([]);
+      }
+    })();
+    return () => { active = false; };
   }, []);
 
   const currency = (orders[0]?.currency) ?? (locale === 'ar' ? 'ج.م' : 'EGP');

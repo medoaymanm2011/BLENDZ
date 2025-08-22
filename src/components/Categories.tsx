@@ -1,13 +1,61 @@
 'use client';
 
+import { useEffect, useMemo, useState } from 'react';
 import LocaleLink from './LocaleLink';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
-import { categories as categoriesData } from '@/data/categories';
+import { categories as fallbackCategories } from '@/data/categories';
+
+type UiCategory = {
+  id: string | number;
+  slug: string;
+  nameAr?: string;
+  nameEn?: string;
+  image?: string;
+  icon?: string;
+};
 
 export default function Categories() {
   const t = useTranslations();
   const locale = useLocale();
+  const [items, setItems] = useState<UiCategory[] | null>(null);
+
+  const staticItems = useMemo<UiCategory[]>(
+    () =>
+      fallbackCategories.map((c) => ({
+        id: c.id,
+        slug: c.slug,
+        nameAr: c.name.ar,
+        nameEn: c.name.en,
+        image: c.image,
+        icon: c.icon,
+      })),
+    []
+  );
+
+  useEffect(() => {
+    const ac = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch('/api/categories', { signal: ac.signal, cache: 'no-store' });
+        if (!res.ok) throw new Error('Failed');
+        const data = await res.json();
+        const apiItems: UiCategory[] = (data?.categories ?? []).map((c: any) => ({
+          id: c._id ?? c.id,
+          slug: c.slug,
+          nameAr: c.name, // API currently has single name; mirror to both
+          nameEn: c.name,
+          image: c.image,
+        }));
+        setItems(apiItems.length ? apiItems : staticItems);
+      } catch {
+        setItems(staticItems);
+      }
+    })();
+    return () => ac.abort();
+  }, [staticItems]);
+
+  const list = items ?? staticItems;
 
   return (
     <section className="bg-white py-10">
@@ -33,7 +81,7 @@ export default function Categories() {
 
         {/* Cards grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5">
-          {categoriesData.map((category) => (
+          {list.map((category) => (
             <LocaleLink
               key={category.id}
               href={`/search?categories[0]=${category.id}`}
@@ -43,7 +91,7 @@ export default function Categories() {
               {category.image ? (
                 <Image
                   src={category.image}
-                  alt={locale === 'ar' ? category.name.ar : category.name.en}
+                  alt={locale === 'ar' ? (category.nameAr || category.nameEn || 'Category') : (category.nameEn || category.nameAr || 'Category')}
                   fill
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                   className="object-cover"
@@ -59,14 +107,14 @@ export default function Categories() {
               {/* Top title */}
               <div className="absolute top-3 left-4 right-4">
                 <h3 className="text-white text-xl md:text-2xl font-semibold drop-shadow text-right">
-                  {locale === 'ar' ? category.name.ar : category.name.en}
+                  {locale === 'ar' ? (category.nameAr || category.nameEn) : (category.nameEn || category.nameAr)}
                 </h3>
               </div>
 
               {/* Bottom caption (smaller) */}
               <div className="absolute bottom-3 left-4 right-4">
                 <p className="text-white/95 text-xs md:text-sm font-medium line-clamp-1">
-                  {locale === 'ar' ? category.name.ar : category.name.en}
+                  {locale === 'ar' ? (category.nameAr || category.nameEn) : (category.nameEn || category.nameAr)}
                 </p>
               </div>
             </LocaleLink>

@@ -11,11 +11,12 @@ function getAuth(req: NextRequest): JwtPayload | null {
 }
 
 // GET /api/orders/[id] -> admin or owner
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = getAuth(req);
     await connectToDB();
-    const order = await Order.findById(params.id);
+    const { id } = await params;
+    const order = await Order.findById(id);
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     // Enforce access: admin or owner (by userId)
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PATCH /api/orders/[id]/status handled here (single endpoint)
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = getAuth(req);
     if (!auth || auth.role !== 'admin') {
@@ -46,7 +47,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const provider = body?.provider as string | undefined;
     const note = body?.note as string | undefined;
 
-    const order = await Order.findById(params.id);
+    const { id } = await params;
+    const order = await Order.findById(id);
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     if (nextStatus) order.status = nextStatus;
@@ -66,7 +68,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 // DELETE /api/orders/[id] -> cancel order and restock (admin only)
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const auth = getAuth(req);
     if (!auth || auth.role !== 'admin') {
@@ -74,7 +76,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     }
     await connectToDB();
 
-    const order = await Order.findById(params.id);
+    const { id } = await params;
+    const order = await Order.findById(id);
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     if (order.status === 'cancelled') {
@@ -98,3 +101,4 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     return NextResponse.json({ error: e?.message || 'Server error' }, { status: 500 });
   }
 }
+

@@ -3,12 +3,13 @@ import { connectToDB } from '@/lib/db';
 import { updateSlide, deleteSlide } from '@/server/controllers/slidesController';
 import { requireAdmin } from '@/server/middleware/auth';
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectToDB();
     requireAdmin(req);
     const body = await req.json();
-    const slide = await updateSlide(params.id, body);
+    const { id } = await params;
+    const slide = await updateSlide(id, body);
     if (!slide) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ slide });
   } catch (e: any) {
@@ -16,14 +17,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectToDB();
     requireAdmin(req);
-    const res = await deleteSlide(params.id);
+    const { id } = await params;
+    const res = await deleteSlide(id);
     if (!res) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Failed to delete slide' }, { status: 400 });
   }
 }
+

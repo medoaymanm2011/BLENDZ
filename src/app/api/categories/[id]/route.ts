@@ -3,12 +3,13 @@ import { connectToDB } from '@/lib/db';
 import { updateCategory, deleteCategory } from '@/server/controllers/categoriesController';
 import { requireAdmin } from '@/server/middleware/auth';
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectToDB();
     requireAdmin(req);
     const body = await req.json();
-    const category = await updateCategory(params.id, body);
+    const { id } = await params;
+    const category = await updateCategory(id, body);
     if (!category) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ category });
   } catch (e: any) {
@@ -16,14 +17,16 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     await connectToDB();
     requireAdmin(req);
-    const res = await deleteCategory(params.id);
+    const { id } = await params;
+    const res = await deleteCategory(id);
     if (!res) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || 'Failed to delete category' }, { status: 400 });
   }
 }
+

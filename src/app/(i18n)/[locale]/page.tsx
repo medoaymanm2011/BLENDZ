@@ -9,7 +9,8 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { verifyToken, type JwtPayload } from '@/lib/jwt';
 
-export default async function LocaleHomePage({ params }: { params: { locale: string } }) {
+export default async function LocaleHomePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   // Server-side redirect: if admin, go to dashboard immediately (no flicker)
   try {
     const cookieStore = await cookies();
@@ -17,7 +18,7 @@ export default async function LocaleHomePage({ params }: { params: { locale: str
     if (token) {
       const payload = verifyToken<JwtPayload>(token);
       if (payload && payload.role === 'admin') {
-        redirect(`/${params.locale}/admin`);
+        redirect(`/${locale}/admin`);
       }
     }
   } catch {}

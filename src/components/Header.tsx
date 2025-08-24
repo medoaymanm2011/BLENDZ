@@ -444,7 +444,23 @@ export default function Header() {
                 <button onClick={() => { setIsMenuOpen(false); setIsSearchOpen(true); }} className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 </button>
-                <Link href={`/${locale}/wishlist`} onClick={() => setIsMenuOpen(false)} className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50">
+                <Link
+                  href={`/${locale}/wishlist`}
+                  onClick={(e) => {
+                    if (!user) {
+                      e.preventDefault();
+                      setIsMenuOpen(false);
+                      goToLogin({
+                        title: t('auth.loginRequired.title'),
+                        description: t('auth.loginRequired.description'),
+                        redirectTo: `/${locale}/wishlist`,
+                      });
+                    } else {
+                      setIsMenuOpen(false);
+                    }
+                  }}
+                  className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50"
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                 </Link>
                 {!user && (
@@ -452,7 +468,23 @@ export default function Header() {
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                   </button>
                 )}
-                <Link href={`/${locale}/cart`} onClick={() => setIsMenuOpen(false)} className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50">
+                <Link
+                  href={`/${locale}/cart`}
+                  onClick={(e) => {
+                    if (!user) {
+                      e.preventDefault();
+                      setIsMenuOpen(false);
+                      goToLogin({
+                        title: t('auth.loginRequired.title'),
+                        description: t('auth.loginRequired.description'),
+                        redirectTo: `/${locale}/cart`,
+                      });
+                    } else {
+                      setIsMenuOpen(false);
+                    }
+                  }}
+                  className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white hover:bg-gray-50"
+                >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8V7a3 3 0 0 1 6 0v1" /></svg>
                 </Link>
               </div>
@@ -523,7 +555,23 @@ export default function Header() {
                     </span>
                     <span className="text-[11px] text-gray-600">{t('search.title')}</span>
                   </button>
-                  <Link href={`/${locale}/wishlist`} onClick={() => setIsQuickOpen(false)} className="flex flex-col items-center gap-1">
+                  <Link
+                    href={`/${locale}/wishlist`}
+                    onClick={(e) => {
+                      if (!user) {
+                        e.preventDefault();
+                        setIsQuickOpen(false);
+                        goToLogin({
+                          title: t('auth.loginRequired.title'),
+                          description: t('auth.loginRequired.description'),
+                          redirectTo: `/${locale}/wishlist`,
+                        });
+                      } else {
+                        setIsQuickOpen(false);
+                      }
+                    }}
+                    className="flex flex-col items-center gap-1"
+                  >
                     <span className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                     </span>
@@ -542,7 +590,23 @@ export default function Header() {
                       <span className="text-[11px] text-gray-600">{t('header.account')}</span>
                     </button>
                   )}
-                  <Link href={`/${locale}/cart`} onClick={() => setIsQuickOpen(false)} className="flex flex-col items-center gap-1">
+                  <Link
+                    href={`/${locale}/cart`}
+                    onClick={(e) => {
+                      if (!user) {
+                        e.preventDefault();
+                        setIsQuickOpen(false);
+                        goToLogin({
+                          title: t('auth.loginRequired.title'),
+                          description: t('auth.loginRequired.description'),
+                          redirectTo: `/${locale}/cart`,
+                        });
+                      } else {
+                        setIsQuickOpen(false);
+                      }
+                    }}
+                    className="flex flex-col items-center gap-1"
+                  >
                     <span className="inline-flex items-center justify-center w-10 h-10 rounded-full border border-gray-200 bg-white">
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8V7a3 3 0 0 1 6 0v1" /></svg>
                     </span>

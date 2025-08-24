@@ -30,7 +30,7 @@ export async function registerHandler(req: NextRequest) {
       const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
       exists.verificationCode = verificationCode;
       await exists.save();
-      try { await sendVerificationEmail(exists.email, verificationCode, locale); } catch (e) { try { console.error('Email send failed (register resend):', e); } catch {} }
+      try { void sendVerificationEmail(exists.email, verificationCode, locale).catch((e) => { try { console.error('Email send failed (register resend):', e); } catch {} }); } catch {}
       return NextResponse.json({ user: { id: exists._id, name: exists.name, email: exists.email, role: exists.role }, requiresVerification: true }, { status: 200 });
     }
     return NextResponse.json({ error: { code: 'EMAIL_EXISTS', message: 'Email already registered' } }, { status: 409 });
@@ -40,7 +40,7 @@ export async function registerHandler(req: NextRequest) {
   const role: 'admin' | 'user' = 'user';
   const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
   const user = await User.create({ name, email: normalizedEmail, passwordHash, role, verified: false, verificationCode });
-  try { await sendVerificationEmail(user.email, verificationCode, locale); } catch (e) { try { console.error('Email send failed (register):', e); } catch {} }
+  try { void sendVerificationEmail(user.email, verificationCode, locale).catch((e) => { try { console.error('Email send failed (register):', e); } catch {} }); } catch {}
   return NextResponse.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role }, requiresVerification: true }, { status: 201 });
 }
 

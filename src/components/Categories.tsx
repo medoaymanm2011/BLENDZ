@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import LocaleLink from './LocaleLink';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
-import { categories as fallbackCategories } from '@/data/categories';
 
 type UiCategory = {
   id: string | number;
@@ -20,19 +19,6 @@ export default function Categories() {
   const locale = useLocale();
   const [items, setItems] = useState<UiCategory[] | null>(null);
 
-  const staticItems = useMemo<UiCategory[]>(
-    () =>
-      fallbackCategories.map((c) => ({
-        id: c.id,
-        slug: c.slug,
-        nameAr: c.name.ar,
-        nameEn: c.name.en,
-        image: c.image,
-        icon: c.icon,
-      })),
-    []
-  );
-
   useEffect(() => {
     const ac = new AbortController();
     (async () => {
@@ -43,19 +29,19 @@ export default function Categories() {
         const apiItems: UiCategory[] = (data?.categories ?? []).map((c: any) => ({
           id: c._id ?? c.id,
           slug: c.slug,
-          nameAr: c.name, // API currently has single name; mirror to both
+          nameAr: c.name, // if API has single name, mirror to both
           nameEn: c.name,
           image: c.image,
         }));
-        setItems(apiItems.length ? apiItems : staticItems);
+        setItems(apiItems);
       } catch {
-        setItems(staticItems);
+        setItems([]);
       }
     })();
     return () => ac.abort();
-  }, [staticItems]);
+  }, []);
 
-  const list = items ?? staticItems;
+  const list = items ?? [];
 
   return (
     <section className="bg-white py-10">

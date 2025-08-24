@@ -29,7 +29,8 @@ export default function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const pathname = usePathname();
-  useMemo(() => pathname?.split('/').filter(Boolean)[0] || 'en', [pathname]);
+  const locale = useMemo(() => pathname?.split('/').filter(Boolean)[0] || 'en', [pathname]);
+  const isAR = locale === 'ar';
   const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN as string | undefined;
 
   useEffect(() => {
@@ -111,36 +112,36 @@ export default function AdminSettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Admin • Settings</h1>
+    <div className="space-y-4" dir={isAR ? 'rtl' : 'ltr'}>
+      <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • الإعدادات' : 'Admin • Settings'}</h1>
       {loading ? (
-        <div className="text-gray-500">Loading…</div>
+        <div className="text-gray-500">{isAR ? 'جارٍ التحميل…' : 'Loading…'}</div>
       ) : (
-        <form onSubmit={onSave} className="grid gap-4 bg-white rounded-xl p-4 shadow">
+        <form onSubmit={onSave} className={`grid gap-4 bg-white rounded-xl p-4 shadow ${isAR ? 'text-right' : ''}`}>
           {/* Store info */}
           <div className="grid md:grid-cols-2 gap-3">
             <input
               value={settings.storeName || ''}
               onChange={(e) => setSettings((s) => ({ ...s, storeName: e.target.value }))}
-              placeholder="Store Name"
+              placeholder={isAR ? 'اسم المتجر' : 'Store Name'}
               className="input input-bordered w-full p-2 rounded border border-gray-300"
             />
             <input
               value={settings.contactEmail || ''}
               onChange={(e) => setSettings((s) => ({ ...s, contactEmail: e.target.value }))}
-              placeholder="Contact Email"
+              placeholder={isAR ? 'البريد الإلكتروني للتواصل' : 'Contact Email'}
               className="input input-bordered w-full p-2 rounded border border-gray-300"
             />
             <input
               value={settings.phone || ''}
               onChange={(e) => setSettings((s) => ({ ...s, phone: e.target.value }))}
-              placeholder="Phone"
+              placeholder={isAR ? 'الهاتف' : 'Phone'}
               className="input input-bordered w-full p-2 rounded border border-gray-300"
             />
             <input
               value={settings.address || ''}
               onChange={(e) => setSettings((s) => ({ ...s, address: e.target.value }))}
-              placeholder="Address"
+              placeholder={isAR ? 'العنوان' : 'Address'}
               className="input input-bordered w-full p-2 rounded border border-gray-300"
             />
           </div>
@@ -150,7 +151,7 @@ export default function AdminSettingsPage() {
             <input
               value={(settings.currencies || []).join(', ')}
               onChange={(e) => setCurrencyCsv(e.target.value)}
-              placeholder="Currencies (CSV), e.g. EGP, USD"
+              placeholder={isAR ? 'العملات (مفصولة بفواصل)، مثل: EGP, USD' : 'Currencies (CSV), e.g. EGP, USD'}
               className="input input-bordered w-full p-2 rounded border border-gray-300 md:col-span-2"
             />
             <select
@@ -172,7 +173,7 @@ export default function AdminSettingsPage() {
                 checked={!!settings.payments?.cod}
                 onChange={(e) => setSettings((s) => ({ ...s, payments: { ...(s.payments || {}), cod: e.target.checked } }))}
               />
-              Cash on Delivery (COD)
+              {isAR ? 'الدفع عند الاستلام (COD)' : 'Cash on Delivery (COD)'}
             </label>
             <label className="inline-flex items-center gap-2 text-sm">
               <input
@@ -180,15 +181,15 @@ export default function AdminSettingsPage() {
                 checked={!!settings.payments?.stripeEnabled}
                 onChange={(e) => setSettings((s) => ({ ...s, payments: { ...(s.payments || {}), stripeEnabled: e.target.checked } }))}
               />
-              Stripe Enabled
+              {isAR ? 'تفعيل سترايب' : 'Stripe Enabled'}
             </label>
           </div>
 
           {/* Shipping methods */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <div className="text-sm text-gray-600">Shipping Methods</div>
-              <button type="button" onClick={addShip} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">Add</button>
+              <div className="text-sm text-gray-600">{isAR ? 'طرق الشحن' : 'Shipping Methods'}</div>
+              <button type="button" onClick={addShip} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">{isAR ? 'إضافة' : 'Add'}</button>
             </div>
             <div className="grid gap-2">
               {(settings.shippingMethods || []).map((m, idx) => (
@@ -199,7 +200,7 @@ export default function AdminSettingsPage() {
                       ...s,
                       shippingMethods: (s.shippingMethods || []).map((x) => x.code === m.code ? { ...x, code: e.target.value } : x),
                     }))}
-                    placeholder="code"
+                    placeholder={isAR ? 'الكود' : 'code'}
                     className="input input-bordered w-full p-2 rounded border border-gray-300"
                   />
                   <input
@@ -208,7 +209,7 @@ export default function AdminSettingsPage() {
                       ...s,
                       shippingMethods: (s.shippingMethods || []).map((x) => x.code === m.code ? { ...x, name: e.target.value } : x),
                     }))}
-                    placeholder="name"
+                    placeholder={isAR ? 'الاسم' : 'name'}
                     className="input input-bordered w-full p-2 rounded border border-gray-300"
                   />
                   <input
@@ -218,7 +219,7 @@ export default function AdminSettingsPage() {
                       ...s,
                       shippingMethods: (s.shippingMethods || []).map((x) => x.code === m.code ? { ...x, price: Number(e.target.value) || 0 } : x),
                     }))}
-                    placeholder="price"
+                    placeholder={isAR ? 'السعر' : 'price'}
                     className="input input-bordered w-full p-2 rounded border border-gray-300"
                   />
                   <label className="inline-flex items-center gap-2 text-sm">
@@ -230,9 +231,9 @@ export default function AdminSettingsPage() {
                         shippingMethods: (s.shippingMethods || []).map((x) => x.code === m.code ? { ...x, enabled: e.target.checked } : x),
                       }))}
                     />
-                    enabled
+                    {isAR ? 'مفعّل' : 'enabled'}
                   </label>
-                  <button type="button" onClick={() => removeShip(m.code)} className="text-red-600 hover:underline text-sm">Remove</button>
+                  <button type="button" onClick={() => removeShip(m.code)} className="text-red-600 hover:underline text-sm">{isAR ? 'حذف' : 'Remove'}</button>
                 </div>
               ))}
             </div>
@@ -240,7 +241,7 @@ export default function AdminSettingsPage() {
 
           <div className="pt-2">
             <button disabled={saving} type="submit" className="bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">
-              {saving ? 'Saving…' : 'Save Settings'}
+              {saving ? (isAR ? 'جارٍ الحفظ…' : 'Saving…') : (isAR ? 'حفظ الإعدادات' : 'Save Settings')}
             </button>
           </div>
         </form>

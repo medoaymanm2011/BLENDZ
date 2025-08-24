@@ -21,24 +21,53 @@ export default function ReturnHistoryPage() {
   const locale = useLocale();
   const router = useRouter();
   const [returns, setReturns] = useState<DisplayReturn[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem('vk_returns');
-      const arr: RawReturn[] = raw ? JSON.parse(raw) : [];
-      const normalized: DisplayReturn[] = arr.map((r: RawReturn) => ({
-        id: String(r.id ?? ''),
-        orderId: String(r.orderId ?? ''),
-        date: String(r.createdAt ?? r.date ?? new Date().toISOString()),
-        status: String(r.status ?? 'Pending'),
-        itemsCount: Array.isArray(r.items) ? r.items.length : Number(r.items ?? 0),
-        reason: r.reason ? String(r.reason) : undefined,
-      }));
-      normalized.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setReturns(normalized);
-    } catch {
-      setReturns([]);
-    }
+    (async () => {
+      setLoading(true);
+      try {
+        // Prefer server list (reflects admin decisions). API returns only user's returns when not admin.
+        const res = await fetch('/api/returns', { credentials: 'include', cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          const arr: RawReturn[] = Array.isArray(data?.returns) ? data.returns : [];
+          const normalized: DisplayReturn[] = arr.map((r: any) => ({
+            id: String(r._id ?? r.id ?? ''),
+            orderId: String(r.orderId ?? ''),
+            date: String(r.createdAt ?? new Date().toISOString()),
+            status: String(r.status ?? 'requested'),
+            itemsCount: Array.isArray(r.items) ? r.items.length : Number(r.items ?? 0),
+            reason: r.reason ? String(r.reason) : undefined,
+          }));
+          normalized.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setReturns(normalized);
+          return;
+        }
+        // fallback to localStorage if unauthorized or API failed
+      } catch {
+        // ignore and fallback
+      } finally {
+        setLoading(false);
+      }
+
+      try {
+        const raw = localStorage.getItem('vk_returns');
+        const arr: RawReturn[] = raw ? JSON.parse(raw) : [];
+        const normalized: DisplayReturn[] = arr.map((r: RawReturn) => ({
+          id: String(r.id ?? ''),
+          orderId: String(r.orderId ?? ''),
+          date: String(r.createdAt ?? r.date ?? new Date().toISOString()),
+          status: String(r.status ?? 'Pending'),
+          itemsCount: Array.isArray(r.items) ? r.items.length : Number(r.items ?? 0),
+          reason: r.reason ? String(r.reason) : undefined,
+        }));
+        normalized.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setReturns(normalized);
+      } catch {
+        setReturns([]);
+      }
+    })();
   }, []);
 
   const badge = (stRaw: string) => {
@@ -66,7 +95,9 @@ export default function ReturnHistoryPage() {
 
         <section className="bg-white rounded-xl border">
           <div className="p-6">
-            {returns.length === 0 ? (
+            {loading ? (
+              <div className="text-gray-600">{locale === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}</div>
+            ) : returns.length === 0 ? (
               <div className="rounded-xl border bg-gray-50 p-10 text-center">
                 <div className="mx-auto w-16 h-16 rounded-full bg-[#2F3E77]/10 flex items-center justify-center mb-4">
                   <svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#2F3E77]"><path d="m3 7 5 5-5 5"/><path d="m13 7 5 5-5 5"/></svg>

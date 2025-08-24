@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import LocaleLink from './LocaleLink';
 import Image from 'next/image';
-import { brands as fallbackBrands } from '@/data/brands';
 
 type UiBrand = {
   id: string | number;
@@ -17,11 +16,6 @@ export default function BrandsSlider() {
   const t = useTranslations();
   const locale = useLocale();
   const [items, setItems] = useState<UiBrand[] | null>(null);
-
-  const staticItems = useMemo<UiBrand[]>(
-    () => fallbackBrands.map((b) => ({ id: b.id, name: b.name, slug: b.slug, image: b.image })),
-    []
-  );
 
   useEffect(() => {
     const ac = new AbortController();
@@ -36,15 +30,15 @@ export default function BrandsSlider() {
           slug: b.slug,
           image: b.image,
         }));
-        setItems(apiItems.length ? apiItems : staticItems);
+        setItems(apiItems);
       } catch {
-        setItems(staticItems);
+        setItems([]);
       }
     })();
     return () => ac.abort();
-  }, [staticItems]);
+  }, []);
 
-  const list = items ?? staticItems;
+  const list = items ?? [];
 
   return (
     <section className="bg-white py-10">

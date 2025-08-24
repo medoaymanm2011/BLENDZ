@@ -24,24 +24,29 @@ export function middleware(req: NextRequest) {
   // Redirect root to default locale
   if (pathname === '/') {
     const url = req.nextUrl.clone();
+    const token = req.cookies.get('auth_token')?.value;
+    if (token) {
+      const payload = decodeJwtPayload<{ role?: string }>(token);
+      if (payload?.role === 'admin') {
+        url.pathname = `/${nextIntlConfig.defaultLocale}/admin`;
+        return NextResponse.redirect(url);
+      }
+    }
     url.pathname = `/${nextIntlConfig.defaultLocale}`;
     return NextResponse.redirect(url);
   }
-  // match "/ar" or "/en" exactly (allow trailing slash)
-  const match = pathname.match(/^\/(ar|en)\/?$/);
-  if (!match) return NextResponse.next();
+  // Match only locale home pages
+  const homeMatch = pathname.match(/^\/(ar|en)\/?$/);
+  if (!homeMatch) return NextResponse.next();
 
-  const locale = match[1];
+  const locale = homeMatch[1] as 'ar' | 'en';
   const token = req.cookies.get('auth_token')?.value;
   if (!token) return NextResponse.next();
   const payload = decodeJwtPayload<{ role?: string }>(token);
   if (payload?.role === 'admin') {
     const url = req.nextUrl.clone();
-    // If at locale home, redirect to admin dashboard
-    if (pathname.match(/^\/(ar|en)\/?$/)) {
-      url.pathname = `/${locale}/admin`;
-      return NextResponse.redirect(url);
-    }
+    url.pathname = `/${locale}/admin`;
+    return NextResponse.redirect(url);
   }
   return NextResponse.next();
 }

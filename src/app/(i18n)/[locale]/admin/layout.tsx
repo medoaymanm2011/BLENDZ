@@ -27,15 +27,17 @@ export default async function AdminLayout({
     redirect(`/${locale}/account`);
   }
   const base = `/${locale}/admin`;
+  const isAR = locale === 'ar';
+  const adminLabel = isAR ? 'لوحة التحكم' : 'Admin';
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gray-50 text-gray-900 flex flex-col" dir={isAR ? 'rtl' : 'ltr'}>
       <AdminTopbar locale={locale} />
-      <main className="container mx-auto px-4 py-6 flex-1">
+      <main className={`container mx-auto px-4 py-6 flex-1 ${isAR ? 'text-right' : ''}`}>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
           <aside className="md:col-span-3 lg:col-span-2">
             <div className="sticky top-6 rounded-xl p-3 bg-white border shadow-sm">
-              <div className="text-xs font-semibold uppercase text-gray-500 px-3 pb-2">Admin</div>
+              <div className="text-xs font-semibold uppercase text-gray-500 px-3 pb-2">{adminLabel}</div>
               <AdminSidebarNav base={base} />
             </div>
           </aside>

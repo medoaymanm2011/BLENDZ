@@ -4,6 +4,8 @@ import { verifyToken, JwtPayload } from '@/lib/jwt';
 import { Order, type OrderStatus } from '@/models/Order';
 import { Product } from '@/models/Product';
 
+export const runtime = 'nodejs';
+
 function getAuth(req: NextRequest): JwtPayload | null {
   const token = req.cookies.get('auth_token')?.value;
   if (!token) return null;
@@ -16,13 +18,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const auth = getAuth(req);
     await connectToDB();
     const { id } = await params;
-    const order = await Order.findById(id);
+    const order = await Order.findById(id)
+      .select('userId items totals status payment tracking createdAt updatedAt shippingInfo')
+      .lean<any>();
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Enforce access: admin or owner (by userId)
+    // Enforce access: admin or owner (by userId). If order has no userId (guest order), allow.
     const isAdmin = auth?.role === 'admin';
     const isOwner = auth?.sub && String(order.userId || '') === String(auth.sub);
-    if (!isAdmin && !isOwner) {
+    const isGuestOrder = !order.userId; // allow read if order was created without an authenticated user
+    if (!isAdmin && !isOwner && !isGuestOrder) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -43,6 +48,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const body = await req.json();
     const nextStatus = body?.status as OrderStatus | undefined;
+    const nextPaymentStatus = body?.paymentStatus as 'pending' | 'paid' | 'cancelled' | undefined;
     const trackingNumber = body?.trackingNumber as string | undefined;
     const provider = body?.provider as string | undefined;
     const note = body?.note as string | undefined;
@@ -52,12 +58,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!order) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     if (nextStatus) order.status = nextStatus;
+    if (nextPaymentStatus) {
+      order.payment = order.payment || ({} as any);
+      order.payment.status = nextPaymentStatus;
+    }
     if (trackingNumber || provider || note) {
       order.tracking = order.tracking || {} as any;
       if (trackingNumber) order.tracking.number = trackingNumber;
       if (provider) order.tracking.provider = provider;
       order.tracking.history = order.tracking.history || [];
       order.tracking.history.push({ ts: new Date(), status: nextStatus || order.status, note });
+    }
+    if (nextPaymentStatus && !note) {
+      order.tracking = order.tracking || ({} as any);
+      order.tracking.history = order.tracking.history || [];
+      order.tracking.history.push({ ts: new Date(), status: order.status, note: `Payment ${nextPaymentStatus}` });
     }
 
     await order.save();

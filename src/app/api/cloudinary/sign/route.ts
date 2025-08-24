@@ -4,11 +4,15 @@ import { requireAdmin } from '@/server/middleware/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    // Protect this endpoint with the admin token
-    requireAdmin(req);
-
     const body = await req.json().catch(() => ({}));
-    const { folder } = body || {} as { folder?: string };
+    const { folder } = (body || {}) as { folder?: string };
+
+    // Security: Allow public signing ONLY for 'receipts' folder
+    // Admin token remains required for any other folder usage (products, brands, etc.)
+    if (folder !== 'receipts') {
+      // Protect non-receipt uploads with admin token
+      requireAdmin(req);
+    }
 
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME as string;
     const apiKey = process.env.CLOUDINARY_API_KEY as string;

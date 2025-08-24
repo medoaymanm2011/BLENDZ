@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
-import { getRandomHeroSlides, getDefaultHeroSlides } from '@/data/home';
 
 type UiSlide = {
   id: number;
@@ -24,16 +23,14 @@ type UiSlide = {
 
 export default function HeroBanner() {
   const [currentSlide, setCurrentSlide] = useState(0);
-  // Deterministic initial slides for SSR/CSR parity
-  const [slides, setSlides] = useState<UiSlide[]>(getDefaultHeroSlides(5));
+  // No static fallback; start empty and render neutral skeleton until dynamic loads
+  const [slides, setSlides] = useState<UiSlide[]>([]);
   const t = useTranslations();
   const locale = useLocale();
   const isRTL = locale === 'ar';
 
   useEffect(() => {
-    // Re-pick a new random set on mount (client-only)
-    setSlides(getRandomHeroSlides(5));
-    // Try to fetch dynamic slides from API (MongoDB). If available, map to UiSlide shape.
+    // Fetch dynamic slides from API (MongoDB). If available, map to UiSlide shape.
     (async () => {
       try {
         const res = await fetch('/api/slides', { cache: 'no-store' });
@@ -51,13 +48,14 @@ export default function HeroBanner() {
         }));
         if (apiSlides.length > 0) setSlides(apiSlides);
       } catch {
-        // ignore, keep fallback
+        // ignore, keep skeleton
       }
     })();
   }, []);
 
   useEffect(() => {
     const len = slides.length || 1;
+    if (slides.length === 0) return; // no rotation while skeleton
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % len);
     }, 5000);
@@ -73,6 +71,13 @@ export default function HeroBanner() {
     const len = slides.length || 1;
     setCurrentSlide((prev) => (prev - 1 + len) % len);
   };
+
+  // Neutral skeleton if no slides
+  if (slides.length === 0) {
+    return (
+      <div className="relative h-[620px] md:h-[820px] lg:h-[900px] overflow-hidden rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 animate-pulse" />
+    );
+  }
 
   return (
     <div className="relative h-[620px] md:h-[820px] lg:h-[900px] overflow-hidden bg-gray-100 rounded-xl">

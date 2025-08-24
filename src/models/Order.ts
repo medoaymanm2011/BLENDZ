@@ -38,6 +38,10 @@ export interface IOrder {
   payment: {
     method: string; // e.g. 'cod'
     status: PaymentStatus;
+    channel?: string | null; // e.g. 'instapay' | 'bank'
+    instapayHandle?: string | null;
+    bankAccount?: string | null;
+    receiptUrl?: string | null; // uploaded payment receipt
   };
   status: OrderStatus;
   tracking?: {
@@ -83,6 +87,10 @@ const OrderSchema = new Schema<IOrder>({
   payment: {
     method: { type: String, required: true, default: 'cod' },
     status: { type: String, required: true, default: 'pending' },
+    channel: { type: String, default: null },
+    instapayHandle: { type: String, default: null },
+    bankAccount: { type: String, default: null },
+    receiptUrl: { type: String, default: null },
   },
   status: { type: String, required: true, default: 'processing' },
   tracking: {

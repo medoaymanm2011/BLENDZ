@@ -7,27 +7,8 @@ import { useLocale } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { useConfirmDialog } from '@/context/ConfirmDialogContext';
 import Portal from '@/components/Portal';
+import { useToast } from '@/context/ToastContext';
 
-// Admin emails for demo purposes
-const ADMIN_EMAILS = ['admin@blendz.com', 'manager@blendz.com'];
-type StoredUser = {
-  name: string;
-  email: string;
-  password: string;
-  role: 'admin' | 'user';
-  verified?: boolean;
-  verificationCode?: string | null;
-};
-const USERS_KEY = 'vk_users';
-const loadUsers = (): StoredUser[] => {
-  try {
-    const raw = localStorage.getItem(USERS_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-};
-const saveUsers = (users: StoredUser[]) => {
-  try { localStorage.setItem(USERS_KEY, JSON.stringify(users)); } catch {}
-};
 
 export default function AccountPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -36,10 +17,13 @@ export default function AccountPage() {
   const [redirecting, setRedirecting] = useState(false);
   const locale = useLocale();
   const router = useRouter();
+  const { showToastCustom } = useToast();
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [loginErrors, setLoginErrors] = useState<{ email?: string; password?: string; general?: string }>({});
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
 
   // Register form state
   const [firstName, setFirstName] = useState('');
@@ -47,9 +31,11 @@ export default function AccountPage() {
   const [registerPassword, setRegisterPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [registerErrors, setRegisterErrors] = useState<{ name?: string; email?: string; password?: string; general?: string }>({});
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [message, setMessage] = useState<string | null>(null);
-  const [alert, setAlert] = useState<{ text: string; type: 'error' | 'success' } | null>(null);
+  // All inline alerts/messages are replaced by toasts
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [showVerify, setShowVerify] = useState(false);
@@ -57,6 +43,19 @@ export default function AccountPage() {
   const [verifyCode, setVerifyCode] = useState('');
 
   const genCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+
+  // Password strength helpers
+  const passwordChecks = (pwd: string) => ({
+    length: pwd.length >= 8,
+    upper: /[A-Z]/.test(pwd),
+    lower: /[a-z]/.test(pwd),
+    number: /\d/.test(pwd),
+    symbol: /[^A-Za-z0-9]/.test(pwd),
+  });
+  const passwordStrength = (pwd: string) => {
+    const c = passwordChecks(pwd);
+    return (c.length ? 1 : 0) + (c.upper ? 1 : 0) + (c.lower ? 1 : 0) + (c.number ? 1 : 0) + (c.symbol ? 1 : 0);
+  };
 
   useEffect(() => {
     // Load session from backend
@@ -85,31 +84,7 @@ export default function AccountPage() {
     })();
   }, []);
 
-  // Seed a demo credential if none exist
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(USERS_KEY);
-      if (!raw) {
-        const seed: StoredUser[] = [
-          { name: 'Demo', email: 'demo@blendz.com', password: '12345678', role: 'user', verified: true, verificationCode: null }
-        ];
-        localStorage.setItem(USERS_KEY, JSON.stringify(seed));
-      } else {
-        // Ensure demo user exists and is verified
-        const users: StoredUser[] = JSON.parse(raw);
-        const idx = users.findIndex(u => u.email?.toLowerCase() === 'demo@blendz.com');
-        if (idx === -1) {
-          users.push({ name: 'Demo', email: 'demo@blendz.com', password: '12345678', role: 'user', verified: true, verificationCode: null });
-          saveUsers(users);
-        } else {
-          // Force verification true for smoother demo
-          users[idx].verified = true;
-          users[idx].verificationCode = null;
-          saveUsers(users);
-        }
-      }
-    } catch {}
-  }, []);
+  // Removed demo/local seeding. Rely solely on backend.
 
   // (optional) password strength checker was removed as unused
 
@@ -121,15 +96,15 @@ export default function AccountPage() {
 
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
-    setAlert(null);
+    // using toasts instead of inline message/alert
+    setLoginErrors({});
 
     const email = loginEmail.trim();
     const password = loginPassword.trim();
 
-    if (!email || !password) { setAlert({ text: locale === 'ar' ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter email and password', type: 'error' }); return; }
-    if (!validateEmail(email)) { setAlert({ text: locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email', type: 'error' }); return; }
-    if (password.length < 6) { setAlert({ text: locale === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters', type: 'error' }); return; }
+    if (!email || !password) { showToastCustom({ message: locale === 'ar' ? 'يرجى إدخال البريد الإلكتروني وكلمة المرور' : 'Please enter email and password', variant: 'danger' }); return; }
+    if (!validateEmail(email)) { showToastCustom({ message: locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email', variant: 'danger' }); return; }
+    if (password.length < 6) { showToastCustom({ message: locale === 'ar' ? 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' : 'Password must be at least 6 characters', variant: 'danger' }); return; }
 
     try {
       const res = await fetch('/api/auth/login', {
@@ -139,13 +114,32 @@ export default function AccountPage() {
         body: JSON.stringify({ email, password })
       });
       const data = await res.json();
+      // Handle structured validation errors
+      if (res.status === 400 && data?.error?.code === 'VALIDATION_FAILED') {
+        const fe = data.error.fieldErrors || {};
+        const err: { email?: string; password?: string; general?: string } = {};
+        if (Array.isArray(fe.email) && fe.email[0]) err.email = String(fe.email[0]);
+        if (Array.isArray(fe.password) && fe.password[0]) err.password = String(fe.password[0]);
+        setLoginErrors(err);
+        return;
+      }
       if (res.status === 403) {
-        setAlert({ text: locale === 'ar' ? 'البريد الإلكتروني غير مُفعل. يرجى تأكيد البريد أولاً.' : 'Email not verified. Please verify your email first.', type: 'error' });
+        showToastCustom({ message: locale === 'ar' ? 'البريد الإلكتروني غير مُفعل. يرجى تأكيد البريد أولاً.' : 'Email not verified. Please verify your email first.', variant: 'danger' });
         // take user to verify page with prefilled email
         router.push(`/${locale}/verify?email=${encodeURIComponent(email)}`);
         return;
       }
-      if (!res.ok) { setAlert({ text: data?.error || (locale === 'ar' ? 'بيانات تسجيل الدخول غير صحيحة' : 'Invalid login credentials'), type: 'error' }); return; }
+      if (!res.ok) {
+        const code = data?.error?.code;
+        const msgMap: Record<string, string> = {
+          INVALID_CREDENTIALS: locale === 'ar' ? 'بيانات تسجيل الدخول غير صحيحة' : 'Invalid login credentials',
+          EMAIL_NOT_VERIFIED: locale === 'ar' ? 'البريد الإلكتروني غير مُفعل' : 'Email not verified',
+          SESSION_ERROR: locale === 'ar' ? 'تعذر إنشاء الجلسة' : 'Failed to establish session',
+        };
+        const friendly = (code && msgMap[code]) || data?.error?.message || (locale === 'ar' ? 'حدث خطأ' : 'An error occurred');
+        showToastCustom({ message: friendly, variant: 'danger' });
+        return;
+      }
       const me = data;
       if (me?.user) {
         try {
@@ -154,10 +148,15 @@ export default function AccountPage() {
           // Store last login password temporarily for prefilling Current Password (masked)
           sessionStorage.setItem('last_login_password', password);
         } catch {}
-        setMessage('تم تسجيل الدخول بنجاح');
+        showToastCustom({ message: locale === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', variant: 'success' });
         setRedirecting(true);
         setLoading(true);
-        // Prefer stored redirect if present
+        // If admin, always go directly to admin dashboard (no flicker)
+        if (me.user.role === 'admin') {
+          router.replace(`/${locale}/admin`);
+          return;
+        }
+        // Otherwise, prefer stored redirect if present
         try {
           const stored = sessionStorage.getItem('post_login_redirect');
           if (stored) {
@@ -166,14 +165,12 @@ export default function AccountPage() {
             return;
           }
         } catch {}
-        if (me.user.role === 'admin') {
-          router.replace(`/${locale}/admin`);
-        } else {
+        {
           router.replace(`/${locale}`);
         }
       }
     } catch (err: any) {
-      setAlert({ text: err?.message || (locale === 'ar' ? 'خطأ في تسجيل الدخول' : 'Login error'), type: 'error' });
+      showToastCustom({ message: err?.message || (locale === 'ar' ? 'خطأ في تسجيل الدخول' : 'Login error'), variant: 'danger' });
     } finally {
       setLoginEmail('');
       setLoginPassword('');
@@ -182,13 +179,22 @@ export default function AccountPage() {
 
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage(null);
-    setAlert(null);
+    // toasts instead of inline
+    setRegisterErrors({});
     
-    if (!firstName || !registerEmail || !registerPassword || !confirmPassword) { setAlert({ text: locale === 'ar' ? 'يرجى إكمال جميع الحقول' : 'Please complete all fields', type: 'error' }); return; }
-    if (!validateEmail(registerEmail)) { setAlert({ text: locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email', type: 'error' }); return; }
-    if (registerPassword.length < 8) { setAlert({ text: locale === 'ar' ? 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' : 'Password must be at least 8 characters', type: 'error' }); return; }
-    if (registerPassword !== confirmPassword) { setAlert({ text: locale === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match', type: 'error' }); return; }
+    if (!firstName || !registerEmail || !registerPassword || !confirmPassword) { showToastCustom({ message: locale === 'ar' ? 'يرجى إكمال جميع الحقول' : 'Please complete all fields', variant: 'danger' }); return; }
+    if (!validateEmail(registerEmail)) { showToastCustom({ message: locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email', variant: 'danger' }); return; }
+    if (registerPassword.length < 8) { showToastCustom({ message: locale === 'ar' ? 'كلمة المرور يجب أن تكون 8 أحرف على الأقل' : 'Password must be at least 8 characters', variant: 'danger' }); return; }
+    // Enforce complexity: upper, lower, number, symbol
+    const checks = passwordChecks(registerPassword);
+    if (!(checks.upper && checks.lower && checks.number && checks.symbol)) {
+      const msg = locale === 'ar'
+        ? 'يجب أن تحتوي كلمة المرور على حرف كبير وحرف صغير ورقم ورمز'
+        : 'Password must include uppercase, lowercase, number, and symbol';
+      showToastCustom({ message: msg, variant: 'danger' });
+      return;
+    }
+    if (registerPassword !== confirmPassword) { showToastCustom({ message: locale === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match', variant: 'danger' }); return; }
 
     try {
       const res = await fetch('/api/auth/register', {
@@ -198,63 +204,96 @@ export default function AccountPage() {
         body: JSON.stringify({ name: firstName.trim(), email: registerEmail.trim(), password: registerPassword })
       });
       const data = await res.json();
+      if (res.status === 400 && data?.error?.code === 'VALIDATION_FAILED') {
+        const fe = data.error.fieldErrors || {};
+        const err: { name?: string; email?: string; password?: string; general?: string } = {};
+        if (Array.isArray(fe.name) && fe.name[0]) err.name = String(fe.name[0]);
+        if (Array.isArray(fe.email) && fe.email[0]) err.email = String(fe.email[0]);
+        if (Array.isArray(fe.password) && fe.password[0]) err.password = String(fe.password[0]);
+        setRegisterErrors(err);
+        return;
+      }
       if (res.status === 409) {
-        setAlert({ text: locale === 'ar' ? 'هذا البريد مسجّل ومُفعل بالفعل. يرجى تسجيل الدخول.' : 'This email is already registered and verified. Please log in.', type: 'error' });
+        const friendly = locale === 'ar' ? 'هذا البريد مسجّل بالفعل. يرجى تسجيل الدخول.' : 'This email is already registered. Please log in.';
+        showToastCustom({ message: friendly, variant: 'danger' });
         setIsLogin(true);
         setLoginEmail(registerEmail.trim());
         return;
       }
-      if (!res.ok) { setAlert({ text: data?.error || (locale === 'ar' ? 'تعذر إنشاء الحساب' : 'Failed to create account'), type: 'error' }); return; }
+      if (!res.ok) {
+        const code = data?.error?.code;
+        const msgMap: Record<string, string> = {
+          EMAIL_EXISTS: locale === 'ar' ? 'هذا البريد مسجّل بالفعل' : 'Email already registered',
+          SESSION_ERROR: locale === 'ar' ? 'تعذر إنشاء الجلسة' : 'Failed to establish session',
+        };
+        const friendly = (code && msgMap[code]) || data?.error?.message || (locale === 'ar' ? 'تعذر إنشاء الحساب' : 'Failed to create account');
+        showToastCustom({ message: friendly, variant: 'danger' });
+        return;
+      }
       // Redirect to verify page to confirm email before login
       router.push(`/${locale}/verify?email=${encodeURIComponent(registerEmail.trim())}`);
       setFirstName(''); setRegisterEmail(''); setRegisterPassword(''); setConfirmPassword('');
     } catch (err: any) {
-      setAlert({ text: err?.message || (locale === 'ar' ? 'خطأ أثناء إنشاء الحساب' : 'An error occurred while creating the account'), type: 'error' });
+      showToastCustom({ message: err?.message || (locale === 'ar' ? 'خطأ أثناء إنشاء الحساب' : 'An error occurred while creating the account'), variant: 'danger' });
     }
   };
 
-  const handleVerifySubmit = (e: React.FormEvent) => {
+  const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // toasts
     if (!verifyEmail || !verifyCode) {
-      setMessage(locale === 'ar' ? 'يرجى إدخال رمز التحقق' : 'Please enter the verification code');
+      showToastCustom({ message: locale === 'ar' ? 'يرجى إدخال رمز التحقق' : 'Please enter the verification code', variant: 'danger' });
       return;
     }
-    const users = loadUsers();
-    const idx = users.findIndex(u => u.email.toLowerCase() === verifyEmail.toLowerCase());
-    if (idx === -1) { setMessage(locale === 'ar' ? 'البريد غير موجود' : 'Email not found'); return; }
-    if (users[idx].verificationCode !== verifyCode) {
-      setMessage(locale === 'ar' ? 'رمز غير صحيح' : 'Invalid code');
-      return;
+    try {
+      const res = await fetch('/api/auth/verify', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verifyEmail, code: verifyCode })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToastCustom({ message: data?.error || (locale === 'ar' ? 'رمز تحقق غير صحيح' : 'Invalid verification code'), variant: 'danger' });
+        return;
+      }
+      showToastCustom({ message: locale === 'ar' ? 'تم التحقق من البريد بنجاح. يمكنك تسجيل الدخول الآن.' : 'Email verified successfully. You can log in now.', variant: 'success' });
+      setShowVerify(false);
+      setIsLogin(true);
+      setLoginEmail(verifyEmail);
+      setVerifyCode('');
+    } catch (e: any) {
+      showToastCustom({ message: e?.message || (locale === 'ar' ? 'تعذر تأكيد البريد الآن' : 'Failed to verify email'), variant: 'danger' });
     }
-    users[idx].verified = true;
-    users[idx].verificationCode = null;
-    saveUsers(users);
-    setMessage(locale === 'ar' ? 'تم التحقق من البريد بنجاح. يمكنك تسجيل الدخول الآن.' : 'Email verified successfully. You can log in now.');
-    setShowVerify(false);
-    setIsLogin(true);
-    setLoginEmail(verifyEmail);
-    setVerifyCode('');
   };
 
-  const resendVerification = () => {
+  const resendVerification = async () => {
     if (!verifyEmail) return;
-    const users = loadUsers();
-    const idx = users.findIndex(u => u.email.toLowerCase() === verifyEmail.toLowerCase());
-    if (idx === -1) { setMessage('البريد غير موجود'); return; }
-    const code = genCode();
-    users[idx].verificationCode = code;
-    saveUsers(users);
-    try { console.log('Verification code (resend):', code, 'for', verifyEmail); } catch {}
-    setMessage(locale === 'ar' ? 'تم إرسال رمز تحقق جديد إلى بريدك.' : 'A new verification code has been sent to your email.');
+    try {
+      const res = await fetch('/api/auth/verify/send', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: verifyEmail })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showToastCustom({ message: data?.error || (locale === 'ar' ? 'تعذر إرسال رمز جديد' : 'Failed to resend verification code'), variant: 'danger' });
+        return;
+      }
+      showToastCustom({ message: locale === 'ar' ? 'تم إرسال رمز تحقق جديد إلى بريدك.' : 'A new verification code has been sent to your email.', variant: 'success' });
+    } catch (e: any) {
+      showToastCustom({ message: e?.message || (locale === 'ar' ? 'تعذر إرسال رمز جديد' : 'Failed to resend verification code'), variant: 'danger' });
+    }
   };
 
   const handlePasswordReset = (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetEmail || !validateEmail(resetEmail)) {
-      setMessage(locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email');
+      showToastCustom({ message: locale === 'ar' ? 'يرجى إدخال بريد إلكتروني صحيح' : 'Please enter a valid email', variant: 'danger' });
       return;
     }
-    setMessage(locale === 'ar' ? 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني' : 'Password reset link has been sent to your email');
+    showToastCustom({ message: locale === 'ar' ? 'تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني' : 'Password reset link has been sent to your email', variant: 'success' });
     setShowPasswordReset(false);
     setResetEmail('');
   };
@@ -268,10 +307,10 @@ export default function AccountPage() {
         sessionStorage.removeItem('last_login_password');
         window.dispatchEvent(new Event('auth_changed'));
       } catch {}
-      setMessage(locale === 'ar' ? 'تم تسجيل الخروج' : 'Logged out successfully');
+      showToastCustom({ message: locale === 'ar' ? 'تم تسجيل الخروج' : 'Logged out successfully', variant: 'success' });
       router.replace(`/${locale}`);
     } catch (e: any) {
-      setMessage(e?.message || (locale === 'ar' ? 'تعذر تسجيل الخروج' : 'Logout failed'));
+      showToastCustom({ message: e?.message || (locale === 'ar' ? 'تعذر تسجيل الخروج' : 'Logout failed'), variant: 'danger' });
     }
   };
 
@@ -306,33 +345,19 @@ export default function AccountPage() {
               </div>
 
               <div className="ltr:pl-6 rtl:pr-6 lg:ltr:pl-8 lg:rtl:pr-8">
-                {message && (
-                  <Portal>
-                    <div className="fixed inset-x-0 top-3 pointer-events-none flex justify-center px-2" style={{ zIndex: 2147483647 }}>
-                      <div className={`pointer-events-auto w-full max-w-md px-4 py-2 rounded-md shadow-md ring-1 ${message.includes('يرجى') || message.includes('خطأ') ? 'bg-red-50 ring-red-200 text-red-800' : 'bg-green-50 ring-green-200 text-green-800'}`}>
-                        {message}
-                      </div>
-                    </div>
-                  </Portal>
-                )}
+                {/* Inline message banner removed in favor of toasts */}
 
                 {/* Profile Information */}
                 <ProfileInfoCard user={user} onSave={(updated) => {
                   const merged = { ...user!, ...updated };
                   setUser(merged);
-                  setMessage(locale === 'ar' ? 'تم حفظ الملف الشخصي' : 'Profile saved');
+                  showToastCustom({ message: locale === 'ar' ? 'تم حفظ الملف الشخصي' : 'Profile saved', variant: 'success' });
                 }} />
 
                 {/* Update Password */}
                 <PasswordCard
-                  currentPassword={(() => {
-                    try {
-                      const users = loadUsers();
-                      const found = users.find(u => u.email.toLowerCase() === (user?.email || '').toLowerCase());
-                      return found?.password || '';
-                    } catch { return ''; }
-                  })()}
-                  onSaved={() => setMessage(locale === 'ar' ? 'تم تحديث كلمة المرور' : 'Password updated')}
+                  currentPassword={''}
+                  onSaved={() => showToastCustom({ message: locale === 'ar' ? 'تم تحديث كلمة المرور' : 'Password updated', variant: 'success' })}
                 />
 
                 {/* Language Preferences */}
@@ -365,11 +390,7 @@ export default function AccountPage() {
               <div className="w-full mx-auto">
                 {/* Removed segmented toggle buttons for cleaner layout */}
 
-                {alert && (
-                  <div className={`mb-4 rounded-md px-4 py-2 text-sm ${alert.type === 'error' ? 'bg-red-50 ring-1 ring-red-200 text-red-800' : 'bg-green-50 ring-1 ring-green-200 text-green-800'}`}>
-                    {alert.text}
-                  </div>
-                )}
+                {/* Inline alerts removed; using toasts */}
 
                 {showVerify ? (
                   <form className="space-y-4" onSubmit={handleVerifySubmit}>
@@ -426,15 +447,32 @@ export default function AccountPage() {
                         type="email" 
                         className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                       />
+                      {loginErrors.email && (<div className="text-red-600 text-sm mt-1">{loginErrors.email}</div>)}
                     </div>
                     <div>
                       <label className="text-sm font-medium block mb-1 text-gray-800">{locale === 'ar' ? 'كلمة المرور' : 'Password'}</label>
-                      <input 
-                        value={loginPassword} 
-                        onChange={(e) => setLoginPassword(e.target.value)} 
-                        type="password" 
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-                      />
+                      <div className="relative">
+                        <input 
+                          value={loginPassword} 
+                          onChange={(e) => setLoginPassword(e.target.value)} 
+                          type={showLoginPassword ? 'text' : 'password'} 
+                          className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10 rtl:pl-10 rtl:pr-3"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPassword(v => !v)}
+                          className="absolute inset-y-0 ltr:right-2 rtl:left-2 flex items-center text-gray-500 hover:text-gray-700"
+                          aria-label={locale === 'ar' ? (showLoginPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور') : (showLoginPassword ? 'Hide password' : 'Show password')}
+                          title={locale === 'ar' ? (showLoginPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور') : (showLoginPassword ? 'Hide password' : 'Show password')}
+                        >
+                          {showLoginPassword ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.11 1 12c.46-1.07 1.1-2.05 1.88-2.9M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58M6.1 6.1 1 1m22 22-5.1-5.1M9.88 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.89 11 8- .29.67-.65 1.3-1.08 1.88"/></svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+                          )}
+                        </button>
+                      </div>
+                      {loginErrors.password && (<div className="text-red-600 text-sm mt-1">{loginErrors.password}</div>)}
                     </div>
 
                     <div className="flex items-center justify-between">
@@ -475,6 +513,7 @@ export default function AccountPage() {
                         type="text" 
                         className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                       />
+                      {registerErrors.name && (<div className="text-red-600 text-sm mt-1">{registerErrors.name}</div>)}
                     </div>
                     <div>
                       <label className="text-sm font-medium block mb-1 text-gray-800">{locale === 'ar' ? 'البريد الإلكتروني' : 'Email'}</label>
@@ -484,24 +523,91 @@ export default function AccountPage() {
                         type="email" 
                         className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
                       />
+                      {registerErrors.email && (<div className="text-red-600 text-sm mt-1">{registerErrors.email}</div>)}
                     </div>
                     <div>
                       <label className="text-sm font-medium block mb-1 text-gray-800">{locale === 'ar' ? 'كلمة المرور' : 'Password'}</label>
-                      <input 
-                        value={registerPassword} 
-                        onChange={(e) => setRegisterPassword(e.target.value)} 
-                        type="password" 
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-                      />
+                      <div className="relative">
+                        <input 
+                          value={registerPassword} 
+                          onChange={(e) => setRegisterPassword(e.target.value)} 
+                          type={showRegisterPassword ? 'text' : 'password'} 
+                          className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10 rtl:pl-10 rtl:pr-3" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRegisterPassword(v => !v)}
+                          className="absolute inset-y-0 ltr:right-2 rtl:left-2 flex items-center text-gray-500 hover:text-gray-700"
+                          aria-label={locale === 'ar' ? (showRegisterPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور') : (showRegisterPassword ? 'Hide password' : 'Show password')}
+                          title={locale === 'ar' ? (showRegisterPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور') : (showRegisterPassword ? 'Hide password' : 'Show password')}
+                        >
+                          {showRegisterPassword ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.11 1 12c.46-1.07 1.1-2.05 1.88-2.9M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58M6.1 6.1 1 1m22 22-5.1-5.1M9.88 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.89 11 8- .29.67-.65 1.3-1.08 1.88"/></svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+                          )}
+                        </button>
+                      </div>
+                      {registerErrors.password && (<div className="text-red-600 text-sm mt-1">{registerErrors.password}</div>)}
+                      {/* Strength meter */}
+                      {registerPassword && (
+                        <div className="mt-2 space-y-2">
+                          <div className="h-2 bg-gray-200 rounded">
+                            {(() => {
+                              const s = passwordStrength(registerPassword);
+                              const width = `${(s / 5) * 100}%`;
+                              const color = s <= 2 ? 'bg-red-500' : s === 3 ? 'bg-yellow-500' : s === 4 ? 'bg-blue-500' : 'bg-green-600';
+                              return <div className={`h-2 ${color} rounded transition-all`} style={{ width }} />;
+                            })()}
+                          </div>
+                          <ul className="text-xs text-gray-700 grid grid-cols-2 gap-x-4 gap-y-1">
+                            {(() => {
+                              const c = passwordChecks(registerPassword);
+                              const Item = ({ ok, label }: { ok: boolean; label: string }) => (
+                                <li className={`flex items-center gap-1 ${ok ? 'text-green-600' : 'text-gray-600'}`}>
+                                  <svg className={`h-4 w-4 ${ok ? 'text-green-600' : 'text-gray-400'}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    {ok ? <path d="M20 6L9 17l-5-5"/> : <circle cx="12" cy="12" r="1"/>}
+                                  </svg>
+                                  {label}
+                                </li>
+                              );
+                              return (
+                                <>
+                                  <Item ok={c.length} label={locale === 'ar' ? '٨ أحرف على الأقل' : 'At least 8 chars'} />
+                                  <Item ok={c.upper} label={locale === 'ar' ? 'حرف كبير' : 'Uppercase letter'} />
+                                  <Item ok={c.lower} label={locale === 'ar' ? 'حرف صغير' : 'Lowercase letter'} />
+                                  <Item ok={c.number} label={locale === 'ar' ? 'رقم' : 'Number'} />
+                                  <Item ok={c.symbol} label={locale === 'ar' ? 'رمز' : 'Symbol'} />
+                                </>
+                              );
+                            })()}
+                          </ul>
+                        </div>
+                      )}
                     </div>
                     <div>
                       <label className="text-sm font-medium block mb-1 text-gray-800">{locale === 'ar' ? 'تأكيد كلمة المرور' : 'Confirm Password'}</label>
-                      <input 
-                        value={confirmPassword} 
-                        onChange={(e) => setConfirmPassword(e.target.value)} 
-                        type="password" 
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent" 
-                      />
+                      <div className="relative">
+                        <input 
+                          value={confirmPassword} 
+                          onChange={(e) => setConfirmPassword(e.target.value)} 
+                          type={showConfirmPassword ? 'text' : 'password'} 
+                          className="w-full px-3 py-2 border border-gray-200 rounded-md text-black placeholder:text-transparent shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent pr-10 rtl:pl-10 rtl:pr-3" 
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(v => !v)}
+                          className="absolute inset-y-0 ltr:right-2 rtl:left-2 flex items-center text-gray-500 hover:text-gray-700"
+                          aria-label={locale === 'ar' ? (showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور') : (showConfirmPassword ? 'Hide password' : 'Show password')}
+                          title={locale === 'ar' ? (showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور') : (showConfirmPassword ? 'Hide password' : 'Show password')}
+                        >
+                          {showConfirmPassword ? (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20C7 20 2.73 16.11 1 12c.46-1.07 1.1-2.05 1.88-2.9M10.58 10.58A2 2 0 0 0 12 14a2 2 0 0 0 1.42-.58M6.1 6.1 1 1m22 22-5.1-5.1M9.88 4.24A10.94 10.94 0 0 1 12 4c5 0 9.27 3.89 11 8- .29.67-.65 1.3-1.08 1.88"/></svg>
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>
+                          )}
+                        </button>
+                      </div>
                       {confirmPassword && registerPassword !== confirmPassword && (
                         <div className="text-red-600 text-sm mt-1">{locale === 'ar' ? 'كلمات المرور غير متطابقة' : 'Passwords do not match'}</div>
                       )}

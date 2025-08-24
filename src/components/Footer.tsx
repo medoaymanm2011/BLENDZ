@@ -33,7 +33,7 @@ export default function Footer() {
           <div>
             <h3 className="text-base font-semibold text-gray-900 mb-4">{t('footer.quickLinks.title')}</h3>
             <ul className="space-y-2 text-sm">
-              <li><Link className="hover:text-gray-900" href={`/${locale}/category/all`}>{t('categories.title')}</Link></li>
+              <li><Link className="hover:text-gray-900" href={`/${locale}/category`}>{t('filters.categories')}</Link></li>
               <li><Link className="hover:text-gray-900" href={`/${locale}/brands`}>{t('nav.brands')}</Link></li>
               <li><Link className="hover:text-gray-900" href={`/${locale}/account/orders`}>{t('account.myOrders')}</Link></li>
               <li><Link className="hover:text-gray-900" href={`/${locale}/wishlist`}>{t('header.wishlist')}</Link></li>

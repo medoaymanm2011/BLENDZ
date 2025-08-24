@@ -53,6 +53,7 @@ export default function AdminHomeSectionsPage() {
     const seg = pathname.split('/').filter(Boolean)[0];
     return seg || '';
   }, [pathname]);
+  const isAR = locale === 'ar';
   const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN as string | undefined;
 
   async function load() {
@@ -161,22 +162,22 @@ export default function AdminHomeSectionsPage() {
   if (authChecking) {
     return (
       <div className="px-4 py-12">
-        <div className="text-center text-gray-600">Checking permissions...</div>
+        <div className="text-center text-gray-600">{isAR ? 'جارٍ التحقق من الصلاحيات...' : 'Checking permissions...'}</div>
       </div>
     );
   }
 
   return (
-    <div className="text-gray-900">
-      <div className="px-1 py-2 space-y-8">
-        <h1 className="text-2xl font-bold">Admin • Home Sections</h1>
+    <div className="text-gray-900" dir={isAR ? 'rtl' : 'ltr'}>
+      <div className={`px-1 py-2 space-y-8 ${isAR ? 'text-right' : ''}`}>
+        <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • أقسام الصفحة الرئيسية' : 'Admin • Home Sections'}</h1>
 
         <form onSubmit={onCreateOrUpdate} className="grid md:grid-cols-6 gap-4 bg-white p-4 rounded-xl shadow">
           <div className="md:col-span-3">
             <input
               value={form.titleEn}
               onChange={(e)=> setForm((f)=> ({ ...f, titleEn: e.target.value, slug: f.slug || slugify(e.target.value) }))}
-              placeholder="Title (EN)"
+              placeholder={isAR ? 'العنوان (EN)' : 'Title (EN)'}
               className="input input-bordered w-full p-2 rounded border border-gray-300"
             />
           </div>
@@ -184,14 +185,14 @@ export default function AdminHomeSectionsPage() {
             <input
               value={form.titleAr}
               onChange={(e)=> setForm((f)=> ({ ...f, titleAr: e.target.value }))}
-              placeholder="العنوان (AR)"
+              placeholder={isAR ? 'العنوان (AR)' : 'Title (AR)'}
               className="input input-bordered w-full p-2 rounded border border-gray-300"
             />
           </div>
           <input
             value={form.slug}
             onChange={(e)=> setForm((f)=> ({ ...f, slug: slugify(e.target.value) }))}
-            placeholder="slug"
+            placeholder={isAR ? 'المعرف (slug)' : 'slug'}
             className="input input-bordered w-full p-2 rounded border border-gray-300"
           />
           <div className="flex gap-2 items-center">
@@ -215,62 +216,62 @@ export default function AdminHomeSectionsPage() {
               }}
               className="input input-bordered w-full p-2 rounded border border-gray-300"
             >
-              <option value="featured">featured</option>
-              <option value="sale">sale</option>
-              <option value="new">new</option>
-              <option value="bestseller">bestseller</option>
-              <option value="recommended">recommended</option>
-              <option value="custom_query">custom_query</option>
-              <option value="other">other</option>
+              <option value="featured">{isAR ? 'مميّز' : 'featured'}</option>
+              <option value="sale">{isAR ? 'تخفيضات' : 'sale'}</option>
+              <option value="new">{isAR ? 'جديد' : 'new'}</option>
+              <option value="bestseller">{isAR ? 'الأكثر مبيعًا' : 'bestseller'}</option>
+              <option value="recommended">{isAR ? 'مقترح' : 'recommended'}</option>
+              <option value="custom_query">{isAR ? 'مخصّص' : 'custom_query'}</option>
+              <option value="other">{isAR ? 'أخرى' : 'other'}</option>
             </select>
             {(form.type === 'custom_query' && (form as any)?.filters?.customTypeName !== undefined) && (
               <input
                 value={String((form as any)?.filters?.customTypeName || '')}
                 onChange={(e)=> setForm((f)=> ({ ...f, filters: { ...(f.filters||{}), customTypeName: e.target.value } as any }))}
-                placeholder="custom section name"
+                placeholder={isAR ? 'اسم القسم المخصّص' : 'custom section name'}
                 className="input input-bordered w-full p-2 rounded border border-gray-300"
               />
             )}
           </div>
           <select value={form.localeMode} onChange={(e)=> setForm((f)=> ({ ...f, localeMode: e.target.value as any }))} className="input input-bordered w-full p-2 rounded border border-gray-300">
-            <option value="all">locale: all</option>
-            <option value="ar">locale: ar</option>
-            <option value="en">locale: en</option>
+            <option value="all">{isAR ? 'اللغة: الكل' : 'locale: all'}</option>
+            <option value="ar">{isAR ? 'اللغة: العربية' : 'locale: ar'}</option>
+            <option value="en">{isAR ? 'اللغة: الإنجليزية' : 'locale: en'}</option>
           </select>
-          <input type="number" value={form.limit ?? 12} onChange={(e)=> setForm((f)=> ({ ...f, limit: Number(e.target.value) || 12 }))} placeholder="limit" className="input input-bordered w-full p-2 rounded border border-gray-300" />
-          <input type="number" value={form.order ?? 100} onChange={(e)=> setForm((f)=> ({ ...f, order: Number(e.target.value) || 0 }))} placeholder="order" className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          <input type="number" value={form.limit ?? 12} onChange={(e)=> setForm((f)=> ({ ...f, limit: Number(e.target.value) || 12 }))} placeholder={isAR ? 'الحد' : 'limit'} className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          <input type="number" value={form.order ?? 100} onChange={(e)=> setForm((f)=> ({ ...f, order: Number(e.target.value) || 0 }))} placeholder={isAR ? 'الترتيب' : 'order'} className="input input-bordered w-full p-2 rounded border border-gray-300" />
           <select value={form.sort} onChange={(e)=> setForm((f)=> ({ ...f, sort: e.target.value as any }))} className="input input-bordered w-full p-2 rounded border border-gray-300">
-            <option value="newest">sort: newest</option>
-            <option value="topSelling">sort: topSelling</option>
-            <option value="priceAsc">sort: priceAsc</option>
-            <option value="priceDesc">sort: priceDesc</option>
-            <option value="custom">sort: custom</option>
+            <option value="newest">{isAR ? 'ترتيب: الأحدث' : 'sort: newest'}</option>
+            <option value="topSelling">{isAR ? 'ترتيب: الأعلى مبيعًا' : 'sort: topSelling'}</option>
+            <option value="priceAsc">{isAR ? 'ترتيب: السعر تصاعديًا' : 'sort: priceAsc'}</option>
+            <option value="priceDesc">{isAR ? 'ترتيب: السعر تنازليًا' : 'sort: priceDesc'}</option>
+            <option value="custom">{isAR ? 'ترتيب: مخصّص' : 'sort: custom'}</option>
           </select>
           <label className="inline-flex items-center gap-2 text-sm">
             <input type="checkbox" checked={!!form.enabled} onChange={(e)=> setForm((f)=> ({ ...f, enabled: e.target.checked }))} />
-            Enabled
+            {isAR ? 'مفعّل' : 'Enabled'}
           </label>
 
           {/* Filters helpers */}
           <input
             value={String((form.filters as any)?.tagsCsv ?? ((form.filters as any)?.tags||[]).join(', '))}
             onChange={(e)=> setForm((f)=> ({ ...f, filters: { ...(f.filters||{}), tagsCsv: e.target.value } as any }))}
-            placeholder="tags (comma separated)"
+            placeholder={isAR ? 'وسوم (مفصولة بفواصل)' : 'tags (comma separated)'}
             className="md:col-span-3 input input-bordered w-full p-2 rounded border border-gray-300"
           />
           <input
             value={String((form.filters as any)?.brandSlugsCsv ?? ((form.filters as any)?.brandSlugs||[]).join(', '))}
             onChange={(e)=> setForm((f)=> ({ ...f, filters: { ...(f.filters||{}), brandSlugsCsv: e.target.value } as any }))}
-            placeholder="brand slugs (comma separated)"
+            placeholder={isAR ? 'معرفات الماركات (مفصولة بفواصل)' : 'brand slugs (comma separated)'}
             className="md:col-span-3 input input-bordered w-full p-2 rounded border border-gray-300"
           />
 
           <div className="md:col-span-6 flex items-center gap-3">
             <button disabled={loading} type="submit" className="bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">
-              {editingId ? (loading ? 'Saving...' : 'Update Section') : (loading ? 'Saving...' : 'Create Section')}
+              {editingId ? (loading ? (isAR ? 'جارٍ الحفظ...' : 'Saving...') : (isAR ? 'تحديث القسم' : 'Update Section')) : (loading ? (isAR ? 'جارٍ الحفظ...' : 'Saving...') : (isAR ? 'إنشاء قسم' : 'Create Section'))}
             </button>
             {editingId ? (
-              <button type="button" onClick={resetForm} className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200">Cancel</button>
+              <button type="button" onClick={resetForm} className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200">{isAR ? 'إلغاء' : 'Cancel'}</button>
             ) : null}
           </div>
         </form>
@@ -282,14 +283,14 @@ export default function AdminHomeSectionsPage() {
                 <div className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center text-xs font-bold">{(s.type||'')[0]?.toUpperCase()}</div>
                 <div>
                   <div className="font-semibold">{s.titleEn} <span className="text-gray-400">/ {s.titleAr}</span></div>
-                  <div className="text-xs text-gray-500">/{s.slug} • {(s as any)?.filters?.customTypeName || s.type} • order {s.order ?? 0} • {s.enabled ? 'enabled' : 'disabled'} • locale {s.localeMode}</div>
+                  <div className="text-xs text-gray-500">/{s.slug} • {(s as any)?.filters?.customTypeName || s.type} • {isAR ? 'الترتيب' : 'order'} {s.order ?? 0} • {s.enabled ? (isAR ? 'مفعّل' : 'enabled') : (isAR ? 'معطّل' : 'disabled')} • {isAR ? 'اللغة' : 'locale'} {s.localeMode}</div>
                 </div>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <button onClick={()=> onChangeOrder(s._id!, -10)} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">▲</button>
                 <button onClick={()=> onChangeOrder(s._id!, +10)} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">▼</button>
-                <button onClick={()=> { setEditingId(s._id!); setForm({ ...s }); }} className="text-blue-700 hover:underline">Edit</button>
-                <button onClick={()=> onDelete(s._id)} className="text-red-600 hover:underline">Delete</button>
+                <button onClick={()=> { setEditingId(s._id!); setForm({ ...s }); }} className="text-blue-700 hover:underline">{isAR ? 'تعديل' : 'Edit'}</button>
+                <button onClick={()=> onDelete(s._id)} className="text-red-600 hover:underline">{isAR ? 'حذف' : 'Delete'}</button>
               </div>
             </div>
           ))}

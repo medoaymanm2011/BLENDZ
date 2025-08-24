@@ -17,8 +17,14 @@ export async function connectToDB() {
   if (cached!.conn) return cached!.conn;
   if (!cached!.promise) {
     if (!MONGODB_URI) throw new Error('MONGODB_URI is missing');
+    // Recommended settings for better perf and stability
+    mongoose.set('strictQuery', true);
     cached!.promise = mongoose.connect(MONGODB_URI, {
-      // options can be added here
+      maxPoolSize: 10,
+      minPoolSize: 1,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+      autoIndex: false, // disable in production; indexes should be created explicitly
     }).then((m) => m);
   }
   cached!.conn = await cached!.promise;

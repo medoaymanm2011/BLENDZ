@@ -1,8 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { brands as brandsData } from '@/data/brands';
-import { products as productsData, type Product as ProductData } from '@/data/products';
+import type { Product as ProductData } from '@/data/products';
 import BrandProductCard from '@/components/BrandProductCard';
 import BrandFiltersDrawer from '@/components/BrandFiltersDrawer';
 import SortDropdown from '@/components/SortDropdown';
@@ -13,66 +12,46 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
   const sp = await searchParams;
   const t = await getTranslations({ locale });
 
-  const brandInfo = brandsData.find((b) => b.slug === brand);
-  const title = brandInfo?.name ?? brand.replace(/-/g, ' ');
-
-  // Build maps for id<->slug
-  const brandSlugById = Object.fromEntries(brandsData.map((b) => [String(b.id), b.slug]));
-  const categorySlugById = Object.fromEntries((await import('@/data/categories')).categories.map((c) => [String(c.id), c.slug]));
-
-  // Parse brands[] and categories[] from query like brands[0]=1
-  const selectedBrandSlugs: string[] = [];
-  const selectedCategorySlugs: string[] = [];
-  for (const key in sp) {
-    const val = Array.isArray(sp[key]) ? (sp[key] as string[])[0] : (sp[key] as string);
-    if (key.startsWith('brands[') && val) {
-      const slug = brandSlugById[val];
-      if (slug) selectedBrandSlugs.push(slug);
+  // Load brands to resolve brandId from slug and to render page title
+  let brands: Array<{ _id: string; name: string; slug?: string }> = [];
+  try {
+    const bRes = await fetch(`/api/brands`, { cache: 'no-store' });
+    if (bRes.ok) {
+      const bJson = await bRes.json();
+      brands = Array.isArray(bJson?.brands) ? bJson.brands : [];
     }
-    if (key.startsWith('categories[') && val) {
-      const cslug = categorySlugById[val];
-      if (cslug) selectedCategorySlugs.push(cslug);
+  } catch {}
+
+  const currentBrand = brands.find((b) => (b.slug || '') === brand);
+  const title = currentBrand?.name ?? brand.replace(/-/g, ' ');
+
+  // Build query to backend products API based on incoming search params
+  const qs = new URLSearchParams();
+  for (const [key, valRaw] of Object.entries(sp)) {
+    if (Array.isArray(valRaw)) {
+      // Only take first per original implementation
+      const v = valRaw[0];
+      if (v != null) qs.set(key, String(v));
+    } else if (valRaw != null) {
+      qs.set(key, String(valRaw));
     }
   }
+  // If no brands[] provided in URL, constrain to current brand page by backend brandId
+  let hasBrandFilter = false;
+  for (const k of qs.keys()) { if (k.startsWith('brands[')) { hasBrandFilter = true; break; } }
+  if (!hasBrandFilter && currentBrand?._id) { qs.set('brands[0]', currentBrand._id); }
 
-  const minPrice = Number((sp.minPrice as string) ?? '');
-  const maxPrice = Number((sp.maxPrice as string) ?? '');
-
-  // Base set: if brands[] present use all products, else stick to current brand page
-  let base: ProductData[] = selectedBrandSlugs.length > 0 ? productsData : productsData.filter((p) => p.brandSlug === brand);
-
-  // Apply filters
-  if (selectedBrandSlugs.length > 0) {
-    base = base.filter((p) => selectedBrandSlugs.includes(p.brandSlug));
-  }
-  if (selectedCategorySlugs.length > 0) {
-    base = base.filter((p) => p.categorySlugs.some((s) => selectedCategorySlugs.includes(s)));
-  }
-  if (!Number.isNaN(minPrice) && minPrice > 0) {
-    base = base.filter((p) => p.price >= minPrice);
-  }
-  if (!Number.isNaN(maxPrice) && maxPrice > 0) {
-    base = base.filter((p) => p.price <= maxPrice);
-  }
-
-  // Search (q)
-  const q = (sp.q as string) || '';
-  if (q.trim()) {
-    const needle = q.trim().toLowerCase();
-    base = base.filter((p) => {
-      const en = (p.name.en || '').toLowerCase();
-      const ar = (p.name.ar || '').toLowerCase();
-      return en.includes(needle) || ar.includes(needle);
-    });
-  }
-
-  // Sort
-  const sort = (sp.sort as string) || 'newest';
-  const items: ProductData[] = [...base];
-  if (sort === 'price_asc') items.sort((a, b) => a.price - b.price);
-  else if (sort === 'price_desc') items.sort((a, b) => b.price - a.price);
-  else if (sort === 'name_asc') items.sort((a, b) => (a.name.en || '').localeCompare(b.name.en || ''));
-  else if (sort === 'name_desc') items.sort((a, b) => (b.name.en || '').localeCompare(a.name.en || ''));
+  // Request products from backend honoring filters, search, and sort
+  let items: ProductData[] = [];
+  try {
+    const url = `/api/products?${qs.toString()}`;
+    const res = await fetch(url, { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      const list: any[] = Array.isArray(data?.products) ? data.products : [];
+      items = list.map(mapDbProductToCardData);
+    }
+  } catch {}
 
   const noResultsText = locale === 'ar' ? 'لا توجد منتجات لهذا البراند' : 'No products found for this brand';
 
@@ -82,9 +61,7 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
       <main className="container mx-auto px-4 py-8">
         {/* Page Title - mimic Search Results */}
         <div className="mb-3">
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">
-            {locale === 'ar' ? 'نتائج البحث' : 'Search Results'}
-          </h1>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">{title}</h1>
         </div>
 
         {/* Search */}
@@ -112,3 +89,28 @@ export default async function BrandPage({ params, searchParams }: { params: Prom
     </div>
   );
 }
+
+// Map DB product to local ProductData shape used by cards
+function mapDbProductToCardData(db: any): ProductData {
+  const hasSale = typeof db?.salePrice === 'number' && db.salePrice >= 0 && db.salePrice < db.price;
+  const price = hasSale ? db.salePrice : db.price;
+  const originalPrice = hasSale ? db.price : undefined;
+  const firstImage = Array.isArray(db?.images) && db.images.length ? db.images[0]?.url : undefined;
+  const discount = hasSale && originalPrice ? Math.round(((originalPrice - price) / originalPrice) * 100) : undefined;
+  return {
+    id: db?._id || db?.slug || Math.random(),
+    slug: db?.slug || String(db?._id || ''),
+    name: { ar: db?.name || '', en: db?.name || '' },
+    brandSlug: db?.brand?.slug || db?.brandSlug || 'brand',
+    categorySlugs: [],
+    price,
+    originalPrice,
+    images: firstImage ? [firstImage] : [],
+    isNew: false,
+    discount: discount && discount > 0 ? discount : undefined,
+    tags: (Array.isArray(db?.sectionTypes) ? db.sectionTypes : undefined) as any,
+    // allow card to infer out-of-stock
+    stock: typeof db?.stock === 'number' ? db.stock : undefined,
+  } as any;
+}
+

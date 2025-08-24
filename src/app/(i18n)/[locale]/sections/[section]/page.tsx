@@ -1,22 +1,46 @@
-import { products as productsData, type Product as ProductData } from '@/data/products';
+import { type Product as ProductData } from '@/data/products';
 import { getTranslations } from 'next-intl/server';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import BrandProductCard from '@/components/BrandProductCard';
+import { connectToDB } from '@/lib/db';
+import { listProducts } from '@/server/controllers/productsController';
 
 type SectionKey = 'featured' | 'sale' | 'new' | 'bestseller' | 'recommended';
 
-function filterBySection(section: SectionKey): ProductData[] {
-  const tag: SectionKey = section ?? 'featured';
-  const items = productsData.filter(p => p.tags?.includes(tag));
-  return items.length ? items : productsData;
+function mapDbProductToCardData(db: any): ProductData {
+  const hasSale = typeof db?.salePrice === 'number' && db.salePrice >= 0 && db.salePrice < db.price;
+  const price = hasSale ? db.salePrice : db.price;
+  const originalPrice = hasSale ? db.price : undefined;
+  const firstImage = Array.isArray(db?.images) && db.images.length ? db.images[0]?.url : undefined;
+  const discount = hasSale && originalPrice ? Math.round(((originalPrice - price) / originalPrice) * 100) : undefined;
+  // Ensure all fields are plain serializable values (no ObjectId instances)
+  const idStr = db?._id ? String(db._id) : (db?.slug ? String(db.slug) : String(Math.random()));
+  return {
+    id: idStr,
+    slug: db?.slug ? String(db.slug) : String(db?._id || ''),
+    name: { ar: db?.name || '', en: db?.name || '' },
+    brandSlug: 'brand',
+    categorySlugs: [],
+    price,
+    originalPrice,
+    images: firstImage ? [firstImage] : [],
+    isNew: false,
+    discount: discount && discount > 0 ? discount : undefined,
+    tags: (Array.isArray(db?.sectionTypes) ? db.sectionTypes : undefined) as any,
+    // extra: stock for OOS rendering
+    stock: typeof db?.stock === 'number' ? db.stock : undefined,
+  } as any;
 }
 
 export default async function SectionPage({ params }: { params: Promise<{ locale: string; section: SectionKey }> }) {
   const { section, locale } = await params;
   const t = await getTranslations({ locale });
 
-  const items = filterBySection(section);
+  await connectToDB();
+  const result = await listProducts({ sectionTypes: [section] });
+  const dbItems = Array.isArray((result as any)?.items) ? (result as any).items : [];
+  const items: ProductData[] = dbItems.map(mapDbProductToCardData) as ProductData[];
 
   const titleMap: Record<SectionKey, string> = {
     featured: t('products.tabs.featured'),

@@ -2,13 +2,14 @@
 
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import CloudinaryUploader from '@/components/CloudinaryUploader';
 import { useMemo, useState, useEffect } from 'react';
 import { CreditCard, Truck, Home, Phone, Mail, MapPin, ClipboardList, Tag, CheckCircle2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
-import { products as productsData } from '@/data/products';
+import { useToast } from '@/context/ToastContext';
 
 type Address = { fullName: string; phone: string; governorate: string; city: string; addressLine: string };
 
@@ -54,10 +55,12 @@ const areaOptions: string[] = [
 ];
 
 export default function CheckoutPage() {
-  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'card'>('cod');
+  const [paymentMethod, setPaymentMethod] = useState<'cod' | 'transfer'>('cod');
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<number | null>(null);
   const [notes, setNotes] = useState('');
+  // Optional receipt uploaded during checkout when transfer selected
+  const [transferReceiptUrl, setTransferReceiptUrl] = useState<string | null>(null);
   const [coupon, setCoupon] = useState('');
   const [showAddressForm, setShowAddressForm] = useState(false);
   const [form, setForm] = useState<Address>({ fullName: '', phone: '', governorate: '', city: '', addressLine: '' });
@@ -65,6 +68,10 @@ export default function CheckoutPage() {
   const locale = useLocale();
   const router = useRouter();
   const t = useTranslations();
+  const { showToast } = useToast();
+  const INSTAPAY_HANDLE = (process.env.NEXT_PUBLIC_INSTAPAY_HANDLE as string) || '';
+  const BANK_ACCOUNT = (process.env.NEXT_PUBLIC_BANK_ACCOUNT as string) || '';
+  const WHATSAPP = (process.env.NEXT_PUBLIC_WHATSAPP as string) || '';
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -83,23 +90,53 @@ export default function CheckoutPage() {
     };
   }, [showAddressForm]);
 
-  const lineItems = useMemo(() => {
-    return store.cart.map((ci) => {
-      const product = productsData.find((p) => p.id === ci.productId);
-      if (!product) return null;
-      return { id: product.id, qty: ci.qty, price: product.price };
-    }).filter(Boolean) as Array<{ id: number; qty: number; price: number }>;
+  // Fetch current prices for items in cart from backend only
+  type PricedItem = { id: string; qty: number; price: number; name: string; image?: string };
+  const [pricedLineItems, setPricedLineItems] = useState<PricedItem[]>([]);
+  const [loadingPrices, setLoadingPrices] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = store.cart.map((c) => String(c.productId)).filter(Boolean);
+    if (ids.length === 0) { setPricedLineItems([]); return; }
+    (async () => {
+      try {
+        setLoadingPrices(true);
+        const res = await fetch('/api/products/by-ids', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        const data = await res.json();
+        const products: any[] = Array.isArray(data?.products) ? data.products : [];
+        if (cancelled) return;
+        const map = new Map<string, any>();
+        for (const p of products) map.set(String(p._id), p);
+        const items: PricedItem[] = store.cart.map((ci) => {
+          const p = map.get(String(ci.productId));
+          const price = p && typeof p.salePrice === 'number' && p.salePrice < p.price ? p.salePrice : p?.price;
+          const firstImage = Array.isArray(p?.images) && p.images.length ? (p.images[0]?.url || p.images[0]) : undefined;
+          return p && typeof price === 'number'
+            ? { id: String(ci.productId), qty: Number(ci.qty || 1), price, name: String(p?.name || ''), image: firstImage }
+            : null;
+        }).filter(Boolean) as PricedItem[];
+        setPricedLineItems(items);
+      } catch {
+        if (!cancelled) setPricedLineItems([]);
+      } finally {
+        if (!cancelled) setLoadingPrices(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [store.cart]);
 
-  const itemsCount = lineItems.reduce((s, i) => s + i.qty, 0);
-  const subtotal = lineItems.reduce((s, i) => s + i.price * i.qty, 0);
+  const itemsCount = pricedLineItems.reduce((s, i) => s + i.qty, 0);
+  const subtotal = pricedLineItems.reduce((s, i) => s + i.price * i.qty, 0);
 
   function calcShipping(addr: Address | null): number | null {
     if (!addr) return null;
-    const gov = addr.governorate.trim().toLowerCase();
-    if (!gov) return null;
-    // Simple rule: Cairo/Giza 60, others 100
-    return /(cairo|giza|القاهرة|الجيزة)/i.test(gov) ? 60 : 100;
+    // Flat rate shipping: 55 EGP everywhere
+    return 55;
   }
   const shippingVal = calcShipping(selectedAddress != null ? addresses[selectedAddress] : null);
   const discount = coupon.trim().toLowerCase() === 'save10' ? subtotal * 0.1 : 0;
@@ -109,28 +146,82 @@ export default function CheckoutPage() {
   const currency = locale === 'ar' ? 'ج.م' : 'EGP';
 
   const placeDisabled = useMemo(()=>{
-    return selectedAddress === null || store.cart.length === 0;
-  }, [selectedAddress, store.cart.length]);
+    const needsReceipt = paymentMethod === 'transfer';
+    return selectedAddress === null || store.cart.length === 0 || (needsReceipt && !transferReceiptUrl);
+  }, [selectedAddress, store.cart.length, paymentMethod, transferReceiptUrl]);
 
-  const handlePlaceOrder = () => {
+  const handlePlaceOrder = async () => {
     if (placeDisabled) return;
-    if (paymentMethod === 'cod') {
-      const id = Math.floor(100000 + Math.random() * 900000).toString();
+    if (paymentMethod === 'cod' || paymentMethod === 'transfer') {
+      // Require receipt for bank transfer to ensure admin can verify
+      if (paymentMethod === 'transfer' && !transferReceiptUrl) {
+        showToast(locale === 'ar' ? 'من فضلك ارفع إيصال التحويل قبل إتمام الطلب.' : 'Please upload the transfer receipt before placing the order.');
+        return;
+      }
       const addr = selectedAddress !== null ? addresses[selectedAddress] : null;
-      const order = {
-        id,
-        date: new Date().toISOString(),
-        paymentMethod: 'Cash on Delivery',
-        status: 'Pending',
-        address: addr,
-        items: store.cart,
-        subtotal,
-        shipping: shippingVal,
-        total,
-        currency,
-      };
-      try { localStorage.setItem('lastOrder', JSON.stringify(order)); } catch {}
-      router.push(`/${locale}/orders/${id}`);
+      const payload = {
+        items: pricedLineItems.map(i => ({ productId: String(i.id), qty: Number(i.qty || 1), name: i.name, image: i.image, price: i.price })),
+        shippingInfo: {
+          name: addr?.fullName || '',
+          phone: addr?.phone || '',
+          city: addr?.city || '',
+          address: addr?.addressLine || '',
+          notes: (notes || '').trim() || undefined,
+        },
+        totals: { subtotal, shipping: shippingVal ?? 0, total, currency },
+        payment: paymentMethod === 'cod'
+          ? { method: 'cod' }
+          : {
+              method: 'bank_transfer',
+              channel: INSTAPAY_HANDLE ? 'instapay' : 'bank',
+              instapayHandle: INSTAPAY_HANDLE || undefined,
+              bankAccount: BANK_ACCOUNT || undefined,
+              receiptUrl: transferReceiptUrl || undefined,
+            },
+      } as any;
+
+      try {
+        // Debug: ensure receiptUrl is present when transfer
+        if (paymentMethod === 'transfer') {
+          console.log('[Checkout] transferReceiptUrl before create:', transferReceiptUrl);
+        }
+        const res = await fetch('/api/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          let msg = 'Failed to place order';
+          try { const e = await res.json(); if (e?.error) msg = e.error; } catch {}
+          showToast(locale === 'ar' ? 'تعذر إنشاء الطلب. تحقق من تسجيل الدخول وتوفر المنتجات.' : msg);
+          return;
+        }
+        const data = await res.json();
+        const saved = data?.order;
+        // Fallback: ensure receipt is attached even if it wasn't stored by POST /api/orders
+        if (paymentMethod === 'transfer' && transferReceiptUrl && saved?._id) {
+          try {
+            await fetch(`/api/orders/${String(saved._id)}/receipt`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ url: transferReceiptUrl })
+            });
+          } catch {}
+        }
+        // clear cart
+        store.clearCart();
+        router.push(`/${locale}/orders/${String(saved?._id || '')}`);
+        if (paymentMethod === 'transfer') {
+          const msg = locale === 'ar'
+            ? 'تم إنشاء طلبك مع إيصال التحويل. سنقوم بالمراجعة قريبًا.'
+            : 'Your order with transfer receipt was created. We will review shortly.';
+          showToast(msg);
+        }
+      } catch {
+        showToast(locale === 'ar' ? 'خطأ في الشبكة. حاول مرة أخرى.' : 'Network error. Please try again.');
+      }
     }
   };
 
@@ -197,28 +288,49 @@ export default function CheckoutPage() {
                   <input type="radio" checked={paymentMethod==='cod'} onChange={()=>setPaymentMethod('cod')} />
                   <span className="flex items-center gap-2 text-[#2F3E77]">{locale === 'ar' ? 'الدفع عند الاستلام' : 'Cash on Delivery'}</span>
                 </label>
-                <label className={`flex items-center gap-3 p-3 rounded-lg border ${paymentMethod==='card' ? 'border-[#2F3E77]' : 'border-gray-200'}`}>
-                  <input type="radio" checked={paymentMethod==='card'} onChange={()=>setPaymentMethod('card')} />
-                  <span className="flex items-center gap-2 text-[#2F3E77]"><CreditCard className="w-4 h-4" /> {locale === 'ar' ? 'دفع أونلاين' : 'Online Payment (Kashier)'}</span>
+                <label className={`flex items-center gap-3 p-3 rounded-lg border ${paymentMethod==='transfer' ? 'border-[#2F3E77]' : 'border-gray-200'}`}>
+                  <input type="radio" checked={paymentMethod==='transfer'} onChange={()=>setPaymentMethod('transfer')} />
+                  <span className="flex items-center gap-2 text-[#2F3E77]"><CreditCard className="w-4 h-4" /> {locale === 'ar' ? 'تحويل بنكي / إنستا باي' : 'Bank Transfer / Instapay'}</span>
                 </label>
 
-                {paymentMethod === 'card' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'رقم البطاقة' : 'Card Number'}</label>
-                      <input type="text" className="w-full mt-1 px-3 py-2 border rounded-lg placeholder-[#2F3E77]" placeholder={locale === 'ar' ? 'رقم البطاقة' : 'Card number'} />
-                    </div>
-                    <div>
-                      <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'اسم حامل البطاقة' : 'Name on Card'}</label>
-                      <input type="text" className="w-full mt-1 px-3 py-2 border rounded-lg placeholder-[#2F3E77]" placeholder={locale === 'ar' ? 'اسم حامل البطاقة' : 'Name on card'} />
-                    </div>
-                    <div>
-                      <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'تاريخ الانتهاء' : 'Expiry'}</label>
-                      <input type="text" className="w-full mt-1 px-3 py-2 border rounded-lg placeholder-[#2F3E77]" placeholder="MM/YY" />
-                    </div>
-                    <div>
-                      <label className="text-sm text-[#2F3E77]">CVV</label>
-                      <input type="text" className="w-full mt-1 px-3 py-2 border rounded-lg placeholder-[#2F3E77]" placeholder="CVV" />
+                {paymentMethod === 'transfer' && (
+                  <div className="p-4 bg-gray-50 rounded-lg text-sm text-[#2F3E77] space-y-2">
+                    <p className="font-medium">{locale === 'ar' ? 'الخطوة الحالية (حل وسط):' : 'Current interim flow:'}</p>
+                    <ul className="list-disc ms-5 space-y-1">
+                      <li>
+                        {locale === 'ar' ? 'من فضلك حوِّل مبلغ الطلب عبر إنستا باي أو التحويل البنكي:' : 'Please transfer the order amount via Instapay or bank transfer:'}
+                        <span className="ms-1 font-semibold text-gray-800">01018551242</span>
+                      </li>
+                      {INSTAPAY_HANDLE ? (
+                        <li>{locale === 'ar' ? `إنستا باي: ${INSTAPAY_HANDLE}` : `Instapay: ${INSTAPAY_HANDLE}`}</li>
+                      ) : null}
+                      {BANK_ACCOUNT ? (
+                        <li>{locale === 'ar' ? `الحساب البنكي: ${BANK_ACCOUNT}` : `Bank account: ${BANK_ACCOUNT}`}</li>
+                      ) : null}
+                      <li>{locale === 'ar' ? 'بعد التحويل، من فضلك ارفع صورة الإيصال بالأسفل لتأكيد الطلب.' : 'After transfer, please upload the receipt screenshot below to confirm the order.'}</li>
+                    </ul>
+                    <p className="text-xs text-gray-600">{locale === 'ar' ? 'لاحقًا سنضيف بوابة دفع أونلاين ليصبح الدفع تلقائيًا.' : 'We will add an online payment gateway later for a fully automated flow.'}</p>
+                    {/* Payment Receipt Upload (optional at checkout) */}
+                    <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
+                      <h3 className="text-sm font-semibold text-[#2F3E77] flex items-center gap-2">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 17v-6a2 2 0 114 0v6m-7 4h10a2 2 0 002-2V7a2 2 0 00-2-2h-3l-1-2H9L8 5H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        {locale === 'ar' ? 'إيصال الدفع' : 'Payment Receipt'}
+                      </h3>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {locale === 'ar' ? 'ارفع صورة إيصال التحويل لتسريع تأكيد الطلب (اختياري الآن).' : 'Upload a transfer receipt photo to speed up processing (optional for now).'}
+                      </p>
+                      <div className="mt-3">
+                        <CloudinaryUploader
+                          onUploaded={(url: string) => setTransferReceiptUrl(url)}
+                          folder="receipts"
+                          buttonText={locale === 'ar' ? 'رفع الإيصال' : 'Upload Receipt'}
+                        />
+                        {transferReceiptUrl ? (
+                          <a href={transferReceiptUrl} target="_blank" rel="noreferrer" className="mt-3 block">
+                            <img src={transferReceiptUrl} alt="receipt" className="max-h-40 rounded border" />
+                          </a>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                 )}

@@ -164,5 +164,7 @@
   "stores.jeddah.hours": "يومياً 10:00 صباحًا - 11:00 مساءً",
   "stores.dammam.name": "فرع الدمام - الشاطئ",
   "stores.dammam.address": "حي الشاطئ، الدمام، المملكة العربية السعودية",
-  "stores.dammam.hours": "يومياً 9:30 صباحًا - 10:30 مساءً"
+  "stores.dammam.hours": "يومياً 9:30 صباحًا - 10:30 مساءً",
+  "common.loading": "جاري التحميل...",
+  "common.noData": "لا توجد بيانات للعرض"
 }

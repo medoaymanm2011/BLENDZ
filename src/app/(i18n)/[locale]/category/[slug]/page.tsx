@@ -1,69 +1,168 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useLocale } from 'next-intl';
-import { products as productsData, type Product as ProductData } from '@/data/products';
-import { categories as categoriesData } from '@/data/categories';
-import { brands as brandsData } from '@/data/brands';
 import { useParams } from 'next/navigation';
 
 export default function CategoryPage() {
   const [sortBy, setSortBy] = useState('default');
   const [priceRange, setPriceRange] = useState([0, 10000]);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   const locale = useLocale();
   const { slug } = useParams<{ slug: string }>();
 
+  type ApiBrand = { _id: string; name: string; slug?: string };
+  type ApiCategory = { _id: string; name: string; slug: string; nameAr?: string; nameEn?: string; nameObj?: { ar?: string; en?: string } };
+  type ApiProduct = {
+    _id: string;
+    name: string;
+    slug: string;
+    price: number;
+    salePrice?: number | null;
+    images?: { url: string }[];
+    brandId?: string | null;
+    categoryId?: string | null;
+  };
+
+  type CardProduct = {
+    id: string;
+    slug: string;
+    title: string;
+    price: number;
+    originalPrice?: number;
+    discount?: number;
+    images: string[];
+    brandName?: string;
+  };
+
+  const [brands, setBrands] = useState<ApiBrand[]>([]);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [metaError, setMetaError] = useState<string | null>(null);
+
+  const [products, setProducts] = useState<CardProduct[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
   const categorySlug = decodeURIComponent(typeof slug === 'string' ? slug : 'all');
-  const currentCategory = categoriesData.find(c => c.slug === categorySlug);
-  const categoryName = currentCategory ? (locale === 'ar' ? currentCategory.name.ar : currentCategory.name.en) : (categorySlug === 'all' ? (locale === 'ar' ? 'جميع المنتجات' : 'All Products') : categorySlug);
+  const currentCategory = useMemo(() => categories.find(c => c.slug === categorySlug), [categories, categorySlug]);
+  const categoryName = currentCategory
+    ? (() => {
+        const ar = (currentCategory as any)?.nameObj?.ar || (currentCategory as any)?.nameAr;
+        const en = (currentCategory as any)?.nameObj?.en || (currentCategory as any)?.nameEn;
+        const fallback = (currentCategory as any)?.name;
+        return locale === 'ar' ? (ar || fallback || currentCategory.slug) : (en || fallback || currentCategory.slug);
+      })()
+    : (categorySlug === 'all' ? (locale === 'ar' ? 'جميع المنتجات' : 'All Products') : categorySlug);
 
+  // Load brands and categories
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoadingMeta(true);
+        setMetaError(null);
+        const [bRes, cRes] = await Promise.all([
+          fetch('/api/brands', { cache: 'no-store' }),
+          fetch('/api/categories', { cache: 'no-store' }),
+        ]);
+        if (!active) return;
+        if (!bRes.ok || !cRes.ok) throw new Error('Failed to load metadata');
+        const bJson = await bRes.json();
+        const cJson = await cRes.json();
+        setBrands(Array.isArray(bJson?.brands) ? bJson.brands : []);
+        setCategories(Array.isArray(cJson?.categories) ? cJson.categories : []);
+      } catch (e: any) {
+        if (active) setMetaError(e?.message || 'Error loading metadata');
+      } finally {
+        if (active) setLoadingMeta(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  // Fetch products whenever filters change
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoadingProducts(true);
+        setProductsError(null);
+        const url = new URL('/api/products', window.location.origin);
+        // Category filter
+        if (currentCategory?._id) {
+          url.searchParams.set('categories[0]', currentCategory._id);
+        }
+        // Brand filters (ids)
+        selectedBrandIds.forEach((id, idx) => url.searchParams.set(`brands[${idx}]`, id));
+        const res = await fetch(url.toString(), { cache: 'no-store' });
+        if (!active) return;
+        if (!res.ok) throw new Error('Failed to load products');
+        const data = await res.json();
+        const items: ApiProduct[] = Array.isArray(data?.products) ? data.products : [];
+        const mapped: CardProduct[] = items.map((p) => {
+          const hasSale = typeof p.salePrice === 'number' && (p.salePrice ?? 0) >= 0 && (p.salePrice as number) < p.price;
+          const price = hasSale ? (p.salePrice as number) : p.price;
+          const originalPrice = hasSale ? p.price : undefined;
+          const discount = hasSale && originalPrice ? Math.round(((originalPrice - price) / originalPrice) * 100) : undefined;
+          const brandName = brands.find(b => b._id === p.brandId)?.name;
+          return {
+            id: p._id,
+            slug: p.slug,
+            title: p.name,
+            price,
+            originalPrice,
+            discount: discount && discount > 0 ? discount : undefined,
+            images: (p.images || []).map(im => im.url).filter(Boolean) as string[],
+            brandName,
+          };
+        });
+        setProducts(mapped);
+      } catch (e: any) {
+        if (active) setProductsError(e?.message || 'Error loading products');
+      } finally {
+        if (active) setLoadingProducts(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [categorySlug, currentCategory?._id, JSON.stringify(selectedBrandIds)]);
+
+  // Apply price filter and sorting client-side
   const filteredProducts = useMemo(() => {
-    const filtered = productsData.filter(product => {
-      const inCategory = categorySlug === 'all' || product.categorySlugs.includes(categorySlug);
-      const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
-      const brandName = brandsData.find(b => b.slug === product.brandSlug)?.name || product.brandSlug;
-      const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(brandName);
-      return inCategory && matchesPrice && matchesBrand;
-    });
-
+    const withinPrice = products.filter(p => p.price >= priceRange[0] && p.price <= priceRange[1]);
+    const copy = [...withinPrice];
     switch (sortBy) {
       case 'price-low':
-        filtered.sort((a, b) => a.price - b.price);
+        copy.sort((a, b) => a.price - b.price);
         break;
       case 'price-high':
-        filtered.sort((a, b) => b.price - a.price);
+        copy.sort((a, b) => b.price - a.price);
         break;
       case 'newest':
-        filtered.sort((a, b) => (b.isNew ? 1 : 0) - (a.isNew ? 1 : 0));
+        // No createdAt in card model; keep default or could sort by id as fallback
         break;
       default:
         break;
     }
+    return copy;
+  }, [products, sortBy, priceRange]);
 
-    return filtered;
-  }, [categoryName, sortBy, priceRange, selectedBrands]);
-
-  const toggleBrand = (brand: string) => {
-    setSelectedBrands(prev => 
-      prev.includes(brand) 
-        ? prev.filter(b => b !== brand)
-        : [...prev, brand]
-    );
+  const toggleBrand = (brandId: string) => {
+    setSelectedBrandIds(prev => prev.includes(brandId) ? prev.filter(id => id !== brandId) : [...prev, brandId]);
   };
 
-  const ProductCard = ({ product }: { product: ProductData }) => (
+  const ProductCard = ({ product }: { product: CardProduct }) => (
     <Link href={`/${locale}/product/${product.slug}`} className="block bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden">
       <div className="relative">
         <div className="h-48 bg-gray-100 flex items-center justify-center">
           {product.images?.[0] ? (
             <div className="relative w-full h-48">
-              <Image src={product.images[0]} alt={locale === 'ar' ? product.name.ar : product.name.en} fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" className="object-contain" />
+              <Image src={product.images[0]} alt={product.title} fill sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw" className="object-contain" />
             </div>
           ) : (
             <div className="text-6xl">🧸</div>
@@ -74,11 +173,6 @@ export default function CategoryPage() {
             -{product.discount}%
           </div>
         )}
-        {product.isNew && (
-          <div className="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded-md text-sm font-bold">
-            جديد
-          </div>
-        )}
         <button className="absolute top-2 left-2 bg-white/80 hover:bg-white rounded-full p-2">
           <svg className="w-5 h-5 text-gray-600 hover:text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -87,8 +181,8 @@ export default function CategoryPage() {
       </div>
       
       <div className="p-4">
-        <div className="text-xs text-purple-600 mb-1">{brandsData.find(b => b.slug === product.brandSlug)?.name || product.brandSlug}</div>
-        <h3 className="font-semibold text-gray-800 mb-2 text-right line-clamp-2">{locale === 'ar' ? product.name.ar : product.name.en}</h3>
+        <div className="text-xs text-purple-600 mb-1">{product.brandName || ''}</div>
+        <h3 className="font-semibold text-gray-800 mb-2 text-right line-clamp-2">{product.title}</h3>
         
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center"></div>
@@ -128,7 +222,7 @@ export default function CategoryPage() {
           </h1>
           
           <div className="flex items-center space-x-4 space-x-reverse">
-            <span className="text-gray-600">عرض {filteredProducts.length} منتج</span>
+            <span className="text-gray-600">{loadingProducts ? (locale === 'ar' ? 'جار التحميل...' : 'Loading...') : `عرض ${filteredProducts.length} منتج`}</span>
             
             <select 
               value={sortBy} 
@@ -179,12 +273,14 @@ export default function CategoryPage() {
               <div className="mb-6">
                 <h4 className="font-semibold mb-3">العلامات التجارية</h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {brandsData.map(brand => (
-                    <label key={brand.slug} className="flex items-center">
+                  {loadingMeta && <div className="text-sm text-gray-500">{locale === 'ar' ? 'جار التحميل...' : 'Loading...'}</div>}
+                  {!loadingMeta && brands.length === 0 && <div className="text-sm text-gray-400">{locale === 'ar' ? 'لا توجد علامات' : 'No brands'}</div>}
+                  {!loadingMeta && brands.map(brand => (
+                    <label key={brand._id} className="flex items-center">
                       <input
                         type="checkbox"
-                        checked={selectedBrands.includes(brand.name)}
-                        onChange={() => toggleBrand(brand.name)}
+                        checked={selectedBrandIds.includes(brand._id)}
+                        onChange={() => toggleBrand(brand._id)}
                         className="ml-2"
                       />
                       <span className="text-sm">{brand.name}</span>
@@ -196,7 +292,7 @@ export default function CategoryPage() {
               {/* Clear Filters */}
               <button 
                 onClick={() => {
-                  setSelectedBrands([]);
+                  setSelectedBrandIds([]);
                   setPriceRange([0, 10000]);
                   setSortBy('default');
                 }}
@@ -209,11 +305,15 @@ export default function CategoryPage() {
 
           {/* Products Grid */}
           <div className="w-full md:w-3/4">
-            {filteredProducts.length > 0 ? (
+            {loadingProducts ? (
+              <div className="bg-white rounded-lg shadow-sm p-6 text-gray-600">{locale === 'ar' ? 'جار تحميل المنتجات...' : 'Loading products...'}</div>
+            ) : productsError ? (
+              <div className="bg-white rounded-lg shadow-sm p-6 text-red-600">{productsError}</div>
+            ) : filteredProducts.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProducts.map(product => (
-                  <ProductCard key={product.id} product={product} />
-                ))}
+                  <ProductCard key={product.id} product={product} />)
+                )}
               </div>
             ) : (
               <div className="text-center py-12">

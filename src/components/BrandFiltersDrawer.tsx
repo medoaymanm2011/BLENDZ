@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { brands as brandsData } from '@/data/brands';
-import { categories as categoriesData } from '@/data/categories';
 
 export default function BrandFiltersDrawer() {
   const t = useTranslations();
@@ -14,10 +12,18 @@ export default function BrandFiltersDrawer() {
   const searchParams = useSearchParams();
 
   const [open, setOpen] = useState(false);
+  // Store selections by backend IDs
   const [selectedBrands, setSelectedBrands] = useState<Record<string, boolean>>({});
   const [selectedCategories, setSelectedCategories] = useState<Record<string, boolean>>({});
   const [minPrice, setMinPrice] = useState<string>('');
   const [maxPrice, setMaxPrice] = useState<string>('');
+
+  type ApiBrand = { _id: string; name: string; slug?: string };
+  type ApiCategory = { _id: string; slug: string; name?: string; nameObj?: { ar?: string; en?: string }; nameAr?: string; nameEn?: string };
+  const [brands, setBrands] = useState<ApiBrand[]>([]);
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+  const [metaError, setMetaError] = useState<string | null>(null);
 
   const appliedCount = useMemo(() => {
     const brandCount = Object.values(selectedBrands).filter(Boolean).length;
@@ -44,11 +50,31 @@ export default function BrandFiltersDrawer() {
     }
   }, [open]);
 
-  // Helpers
-  const brandIdBySlug = useMemo(() => Object.fromEntries(brandsData.map(b => [b.slug, b.id])), []);
-  const brandSlugById = useMemo(() => Object.fromEntries(brandsData.map(b => [String(b.id), b.slug])), []);
-  const categoryIdBySlug = useMemo(() => Object.fromEntries(categoriesData.map(c => [c.slug, c.id])), []);
-  const categorySlugById = useMemo(() => Object.fromEntries(categoriesData.map(c => [String(c.id), c.slug])), []);
+  // Load brands and categories
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoadingMeta(true);
+        setMetaError(null);
+        const [bRes, cRes] = await Promise.all([
+          fetch('/api/brands', { cache: 'no-store' }),
+          fetch('/api/categories', { cache: 'no-store' }),
+        ]);
+        if (!active) return;
+        if (!bRes.ok || !cRes.ok) throw new Error('Failed to load filters');
+        const bJson = await bRes.json();
+        const cJson = await cRes.json();
+        setBrands(Array.isArray(bJson?.brands) ? bJson.brands : []);
+        setCategories(Array.isArray(cJson?.categories) ? cJson.categories : []);
+      } catch (e: any) {
+        if (active) setMetaError(e?.message || 'Error loading filters');
+      } finally {
+        if (active) setLoadingMeta(false);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
 
   // Initialize from URL
   useEffect(() => {
@@ -57,12 +83,12 @@ export default function BrandFiltersDrawer() {
     // collect all brands[i] params
     for (const [key, val] of searchParams.entries()) {
       if (key.startsWith('brands[')) {
-        const slug = brandSlugById[val];
-        if (slug) nextBrands[slug] = true;
+        // val is backend brand id
+        if (val) nextBrands[val] = true;
       }
       if (key.startsWith('categories[')) {
-        const slug = categorySlugById[val];
-        if (slug) nextCats[slug] = true;
+        // val is backend category id
+        if (val) nextCats[val] = true;
       }
     }
     setSelectedBrands(nextBrands);
@@ -84,14 +110,14 @@ export default function BrandFiltersDrawer() {
     // brands[] as brands[0]=id ...
     const brandIds = Object.entries(selectedBrands)
       .filter(([, v]) => v)
-      .map(([slug]) => brandIdBySlug[slug])
+      .map(([id]) => id)
       .filter(Boolean);
     brandIds.forEach((id, idx) => params.set(`brands[${idx}]`, String(id)));
 
     // categories[]
     const catIds = Object.entries(selectedCategories)
       .filter(([, v]) => v)
-      .map(([slug]) => categoryIdBySlug[slug])
+      .map(([id]) => id)
       .filter(Boolean);
     catIds.forEach((id, idx) => params.set(`categories[${idx}]`, String(id)));
 
@@ -168,13 +194,17 @@ export default function BrandFiltersDrawer() {
           <section>
             <h4 className="text-lg font-bold text-gray-800 mb-3">{t('filters.brands')}</h4>
             <div className="space-y-3">
-              {brandsData.map((b) => (
-                <label key={b.slug} className="flex items-center gap-3 text-[15px] text-gray-800">
+              {loadingMeta && <div className="text-sm text-gray-500">{t('common.loading')}</div>}
+              {!loadingMeta && brands.length === 0 && (
+                <div className="text-sm text-gray-400">{locale === 'ar' ? 'لا توجد بيانات' : 'No data'}</div>
+              )}
+              {!loadingMeta && brands.map((b) => (
+                <label key={b._id} className="flex items-center gap-3 text-[15px] text-gray-800">
                   <input
                     type="checkbox"
                     className="accent-blue-700 w-5 h-5"
-                    checked={!!selectedBrands[b.slug]}
-                    onChange={(e) => setSelectedBrands((s) => ({ ...s, [b.slug]: e.target.checked }))}
+                    checked={!!selectedBrands[b._id]}
+                    onChange={(e) => setSelectedBrands((s) => ({ ...s, [b._id]: e.target.checked }))}
                   />
                   <span>{b.name}</span>
                 </label>
@@ -186,29 +216,38 @@ export default function BrandFiltersDrawer() {
           <section>
             <h4 className="text-lg font-bold text-gray-800 mb-3">{t('filters.categories')}</h4>
             <div className="space-y-3">
-              {categoriesData.map((c) => (
-                <div key={c.slug} className="flex items-center justify-between gap-3 text-[15px] text-gray-800">
+              {loadingMeta && <div className="text-sm text-gray-500">{t('common.loading')}</div>}
+              {!loadingMeta && categories.length === 0 && (
+                <div className="text-sm text-gray-400">{locale === 'ar' ? 'لا توجد بيانات' : 'No data'}</div>
+              )}
+              {!loadingMeta && categories.map((c) => (
+                <div key={c._id} className="flex items-center justify-between gap-3 text-[15px] text-gray-800">
                   <div className="flex items-center gap-3">
                     <label className="inline-flex items-center">
                       <input
                         type="checkbox"
                         className="accent-blue-700 w-5 h-5"
-                        checked={!!selectedCategories[c.slug]}
-                        onChange={(e) => setSelectedCategories((s) => ({ ...s, [c.slug]: e.target.checked }))}
+                        checked={!!selectedCategories[c._id]}
+                        onChange={(e) => setSelectedCategories((s) => ({ ...s, [c._id]: e.target.checked }))}
                       />
                     </label>
                     <button
                       type="button"
                       className="text-left hover:text-blue-700"
-                      onClick={() => { router.push(`/${locale}/search?categories[0]=${c.id}`); setOpen(false); }}
+                      onClick={() => { router.push(`/${locale}/search?categories[0]=${c._id}`); setOpen(false); }}
                     >
-                      {locale === 'ar' ? (c.name.ar || c.name.en) : c.name.en}
+                      {(() => {
+                        const ar = c.nameObj?.ar || (c as any).nameAr;
+                        const en = c.nameObj?.en || (c as any).nameEn;
+                        const fallback = c.name;
+                        return locale === 'ar' ? (ar || fallback || c.slug) : (en || fallback || c.slug);
+                      })()}
                     </button>
                   </div>
                   <button
                     type="button"
                     className="text-blue-700 hover:text-blue-800 text-sm"
-                    onClick={() => { router.push(`/${locale}/search?categories[0]=${c.id}`); setOpen(false); }}
+                    onClick={() => { router.push(`/${locale}/search?categories[0]=${c._id}`); setOpen(false); }}
                     aria-label="Open category"
                   >
                     {t('filters.view')}

@@ -6,10 +6,9 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocale } from 'next-intl';
 import { useParams, useRouter } from 'next/navigation';
-import { products as productsData } from '@/data/products';
 import { CheckCircle2, Truck, Clock } from 'lucide-react';
 
-type CartItem = { productId: number; qty: number };
+type CartItem = { productId: string; qty: number; name?: string; price?: number; image?: string };
 
 type Address = { fullName: string; phone: string; governorate: string; city: string; addressLine: string };
 
@@ -24,6 +23,9 @@ type StoredOrder = {
   shipping?: number | null;
   total: number;
   currency: string;
+  paymentStatus?: string;
+  paymentRawMethod?: string;
+  receiptUrl?: string | null;
 };
 
 export default function OrderDetailsPage() {
@@ -44,17 +46,99 @@ export default function OrderDetailsPage() {
   ], [locale]);
 
   useEffect(() => {
+    let mounted = true;
+    // 1) Load local copy first for instant UI
+    let localCopy: StoredOrder | null = null;
     try {
       const raw = localStorage.getItem('lastOrder');
-      if (raw) {
-        const parsed: StoredOrder = JSON.parse(raw);
-        setOrder(parsed);
-      }
+      if (raw) localCopy = JSON.parse(raw) as StoredOrder;
+      if (mounted && localCopy) setOrder(localCopy);
     } catch {}
-  }, []);
+
+    // 2) Fetch from backend and merge
+    (async () => {
+      try {
+        const res = await fetch(`/api/orders/${id}`, { cache: 'no-store', credentials: 'include' });
+        if (!res.ok) return; // keep local if unauthorized or not found
+        const data = await res.json();
+        const o = data?.order;
+        if (!o) return;
+        try { console.log('[OrderDetails] fetched payment:', o?.payment); } catch {}
+        const mapped: StoredOrder = {
+          id: String(o._id || id),
+          date: new Date(o.createdAt || Date.now()).toISOString(),
+          paymentMethod: (o.payment?.method === 'cod') ? (locale === 'ar' ? 'الدفع عند الاستلام' : 'Cash on Delivery') : (o.payment?.method || 'Payment'),
+          status: String(o.status || 'processing').replace(/^(.)/, s=>s.toUpperCase()),
+          address: o.shippingInfo ? {
+            fullName: o.shippingInfo.name || '',
+            phone: o.shippingInfo.phone || '',
+            governorate: '',
+            city: o.shippingInfo.city || '',
+            addressLine: o.shippingInfo.address || '',
+          } : null,
+          // Use backend items for names/prices; fallback to local copy if missing
+          items: (Array.isArray(o.items) && o.items.length > 0)
+            ? o.items.map((it: any) => ({ productId: String(it.productId), qty: Number(it.qty||0), name: it.name, price: it.price, image: it.image }))
+            : (localCopy?.items || []),
+          subtotal: o.totals?.subtotal ?? localCopy?.subtotal ?? 0,
+          shipping: o.totals?.shipping ?? localCopy?.shipping ?? 0,
+          total: o.totals?.total ?? localCopy?.total ?? 0,
+          currency: o.totals?.currency ?? localCopy?.currency ?? (locale === 'ar' ? 'ج.م' : 'EGP'),
+          paymentStatus: o.payment?.status || 'pending',
+          paymentRawMethod: o.payment?.method || '',
+          receiptUrl: o.payment?.receiptUrl || null,
+        };
+        if (mounted) setOrder(mapped);
+      } catch {
+        // ignore network errors; local view remains
+      }
+    })();
+
+    return () => { mounted = false; };
+  }, [id, locale]);
+
+  // Enrich legacy orders whose items are missing images
+  useEffect(() => {
+    if (!order || !Array.isArray(order.items)) return;
+    const missing = order.items.filter((it) => !it.image && it.productId).map((it) => String(it.productId));
+    if (missing.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch('/api/products/by-ids', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ ids: missing })
+        });
+        const data = await res.json();
+        const products: any[] = Array.isArray(data?.products) ? data.products : [];
+        const map = new Map<string, any>();
+        for (const p of products) map.set(String(p._id), p);
+        const updated = order.items.map((it) => {
+          if (it.image || !it.productId) return it;
+          const p = map.get(String(it.productId));
+          const first = Array.isArray(p?.images) && p.images.length ? (p.images[0]?.url || p.images[0]) : undefined;
+          return first ? { ...it, image: first } : it;
+        });
+        if (!cancelled) setOrder({ ...order, items: updated });
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [order]);
 
   const nf = useMemo(() => new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-US', { maximumFractionDigits: 2 }), [locale]);
   const currency = order?.currency ?? (locale === 'ar' ? 'ج.م' : 'EGP');
+
+  // Progress computation based on backend status
+  const { progressPct, isProcessing, isShipped, isDelivered } = useMemo(() => {
+    const st = String(order?.status || '').toLowerCase();
+    const isDelivered = st === 'delivered';
+    const isShipped = st === 'shipped' || isDelivered;
+    const isProcessing = st === 'processing' || st === '' || (!isShipped && !isDelivered);
+    const progressPct = isDelivered ? 100 : isShipped ? 66 : 33;
+    return { progressPct, isProcessing, isShipped, isDelivered };
+  }, [order?.status]);
 
   const cancellable = useMemo(() => {
     const st = order?.status ? String(order.status).toLowerCase() : 'pending';
@@ -73,13 +157,34 @@ export default function OrderDetailsPage() {
     return diffDays <= 30;
   }, [order]);
 
-  const handleCancel = () => {
+  const handleCancel = async () => {
     if (!order || !cancellable) return;
+    // Try backend cancel if possible
+    try {
+      const res = await fetch(`/api/orders/${order.id}`, { method: 'DELETE', credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const next = { ...order, status: 'Cancelled' as const };
+        try {
+          localStorage.setItem('lastOrder', JSON.stringify(next));
+          const raw = localStorage.getItem('vk_orders');
+          if (raw) {
+            const arr = JSON.parse(raw) as any[];
+            const idx = arr.findIndex((o) => String(o.id) === String(order.id));
+            if (idx !== -1) {
+              arr[idx] = { ...arr[idx], status: 'Cancelled', paymentStatus: 'cancelled' };
+              localStorage.setItem('vk_orders', JSON.stringify(arr));
+            }
+          }
+        } catch {}
+        setOrder(next);
+        return;
+      }
+    } catch {}
+    // Fallback to local-only cancel
     const next = { ...order, status: 'Cancelled' as const };
     try {
-      // Update lastOrder
       localStorage.setItem('lastOrder', JSON.stringify(next));
-      // Update vk_orders array if present
       const raw = localStorage.getItem('vk_orders');
       if (raw) {
         const arr = JSON.parse(raw) as any[];
@@ -105,32 +210,65 @@ export default function OrderDetailsPage() {
       createdAt: new Date().toISOString(),
       status: 'Requested',
     };
-    try {
-      // Save return record
-      const raw = localStorage.getItem('vk_returns');
-      const list = raw ? (JSON.parse(raw) as any[]) : [];
-      list.unshift(record);
-      localStorage.setItem('vk_returns', JSON.stringify(list));
-
-      // Update order status locally
-      const next = { ...order, status: 'Return Requested' as const };
-      localStorage.setItem('lastOrder', JSON.stringify(next));
-
-      const ordersRaw = localStorage.getItem('vk_orders');
-      if (ordersRaw) {
-        const arr = JSON.parse(ordersRaw) as any[];
-        const idx = arr.findIndex((o) => String(o.id) === String(order.id));
-        if (idx !== -1) {
-          arr[idx] = { ...arr[idx], status: 'Return Requested' };
-          localStorage.setItem('vk_orders', JSON.stringify(arr));
+    (async () => {
+      // 1) Try backend API
+      try {
+        const res = await fetch(`/api/orders/${order.id}/return`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ reason, notes: (retNotes || '').trim() })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const saved = data?.order;
+          const next = { ...order, status: 'Return Requested' as const };
+          // update local caches
+          try {
+            const raw = localStorage.getItem('vk_returns');
+            const list = raw ? (JSON.parse(raw) as any[]) : [];
+            list.unshift(record);
+            localStorage.setItem('vk_returns', JSON.stringify(list));
+            localStorage.setItem('lastOrder', JSON.stringify(next));
+            const ordersRaw = localStorage.getItem('vk_orders');
+            if (ordersRaw) {
+              const arr = JSON.parse(ordersRaw) as any[];
+              const idx = arr.findIndex((o) => String(o.id) === String(order.id));
+              if (idx !== -1) {
+                arr[idx] = { ...arr[idx], status: 'Return Requested' };
+                localStorage.setItem('vk_orders', JSON.stringify(arr));
+              }
+            }
+          } catch {}
+          setOrder(next);
+          setShowReturnModal(false);
+          router.push(`/${locale}/orders/returns/history`);
+          return;
         }
-      }
+      } catch {}
 
-      setOrder(next);
-    } catch {}
-    setShowReturnModal(false);
-    // Navigate to returns history
-    router.push(`/${locale}/orders/returns/history`);
+      // 2) Fallback to local-only behavior
+      try {
+        const raw = localStorage.getItem('vk_returns');
+        const list = raw ? (JSON.parse(raw) as any[]) : [];
+        list.unshift(record);
+        localStorage.setItem('vk_returns', JSON.stringify(list));
+        const next = { ...order, status: 'Return Requested' as const };
+        localStorage.setItem('lastOrder', JSON.stringify(next));
+        const ordersRaw = localStorage.getItem('vk_orders');
+        if (ordersRaw) {
+          const arr = JSON.parse(ordersRaw) as any[];
+          const idx = arr.findIndex((o) => String(o.id) === String(order.id));
+          if (idx !== -1) {
+            arr[idx] = { ...arr[idx], status: 'Return Requested' };
+            localStorage.setItem('vk_orders', JSON.stringify(arr));
+          }
+        }
+        setOrder(next);
+      } catch {}
+      setShowReturnModal(false);
+      router.push(`/${locale}/orders/returns/history`);
+    })();
   };
 
   return (
@@ -173,20 +311,20 @@ export default function OrderDetailsPage() {
         {/* Progress */}
         <div className="mt-2 bg-white rounded-xl border p-5">
           <div className="h-2 bg-gray-200 rounded-full mb-6">
-            <div className="h-2 bg-[#2F3E77] rounded-full" style={{ width: '40%' }} />
+            <div className="h-2 bg-[#2F3E77] rounded-full transition-all" style={{ width: `${progressPct}%` }} />
           </div>
           <div className="grid grid-cols-3 text-center">
             <div className="flex flex-col items-center gap-1">
-              <Clock className="w-6 h-6 text-[#2F3E77]" />
-              <span className="text-sm font-semibold text-[#2F3E77]">{locale === 'ar' ? 'قيد المعالجة' : 'Processing'}</span>
+              <Clock className={`w-6 h-6 ${isProcessing ? 'text-[#2F3E77]' : 'text-gray-500'}`} />
+              <span className={`text-sm ${isProcessing ? 'font-semibold text-[#2F3E77]' : 'text-gray-800'}`}>{locale === 'ar' ? 'قيد المعالجة' : 'Processing'}</span>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <Truck className="w-6 h-6 text-gray-700" />
-              <span className="text-sm text-gray-800">{locale === 'ar' ? 'تم الشحن' : 'Shipped'}</span>
+              <Truck className={`w-6 h-6 ${isShipped ? 'text-[#2F3E77]' : 'text-gray-500'}`} />
+              <span className={`text-sm ${isShipped ? 'font-semibold text-[#2F3E77]' : 'text-gray-800'}`}>{locale === 'ar' ? 'تم الشحن' : 'Shipped'}</span>
             </div>
             <div className="flex flex-col items-center gap-1">
-              <CheckCircle2 className="w-6 h-6 text-gray-700" />
-              <span className="text-sm text-gray-800">{locale === 'ar' ? 'تم التسليم' : 'Delivered'}</span>
+              <CheckCircle2 className={`w-6 h-6 ${isDelivered ? 'text-[#2F3E77]' : 'text-gray-500'}`} />
+              <span className={`text-sm ${isDelivered ? 'font-semibold text-[#2F3E77]' : 'text-gray-800'}`}>{locale === 'ar' ? 'تم التسليم' : 'Delivered'}</span>
             </div>
           </div>
         </div>
@@ -207,6 +345,32 @@ export default function OrderDetailsPage() {
                 <span className="text-[#2F3E77] font-medium">{locale === 'ar' ? 'طريقة الدفع' : 'Payment Method'}</span>
                 <span className="text-gray-800">{order?.paymentMethod ?? (locale === 'ar' ? 'الدفع عند الاستلام' : 'Cash on Delivery')}</span>
               </div>
+              {order?.receiptUrl ? (
+                <div className="pt-2">
+                  <div className="mb-2 text-[#2F3E77] font-medium">{locale === 'ar' ? 'إيصال التحويل' : 'Transfer Receipt'}</div>
+                  <a href={order.receiptUrl} target="_blank" rel="noreferrer" className="block">
+                    <img
+                      src={order.receiptUrl}
+                      alt="receipt"
+                      referrerPolicy="no-referrer"
+                      className="max-h-64 max-w-full object-contain rounded border"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  </a>
+                  <div className="mt-2 text-xs">
+                    <a href={order.receiptUrl} target="_blank" rel="noreferrer" className="text-[#2F3E77] underline">
+                      {locale === 'ar' ? 'فتح الإيصال في تبويب جديد' : 'Open receipt in new tab'}
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="pt-2 text-xs text-gray-600">{locale === 'ar' ? 'لم يتم رفع إيصال حتى الآن.' : 'No receipt uploaded yet.'}</div>
+              )}
+              {order?.receiptUrl ? (
+                <div className="mt-1 text-[11px] text-gray-600 break-all">
+                  {locale === 'ar' ? 'رابط الإيصال:' : 'Receipt URL:'} {order.receiptUrl}
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -243,23 +407,22 @@ export default function OrderDetailsPage() {
           <div className="p-5">
             {order?.items?.length ? (
               <div className="space-y-4">
-                {order.items.map((ci, idx) => {
-                  const product = productsData.find(p => p.id === ci.productId);
-                  if (!product) return null;
-                  const name = locale === 'ar' ? product.name.ar : product.name.en;
-                  return (
-                    <div key={idx} className="flex items-start justify-between gap-4">
-                      <div className="flex items-start gap-3">
+                {order.items.map((ci, idx) => (
+                  <div key={idx} className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      {ci.image ? (
+                        <div className="w-10 h-10 rounded bg-gray-100" style={{ backgroundImage: `url(${ci.image})`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+                      ) : (
                         <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center">📦</div>
-                        <div>
-                          <div className="font-medium text-[#2F3E77]">{name}</div>
-                          <div className="text-xs text-gray-700">{locale === 'ar' ? 'الكمية' : 'Quantity'}: {ci.qty}</div>
-                        </div>
+                      )}
+                      <div>
+                        <div className="font-medium text-[#2F3E77]">{ci.name || (locale === 'ar' ? 'عنصر' : 'Item')}</div>
+                        <div className="text-xs text-gray-700">{locale === 'ar' ? 'الكمية' : 'Quantity'}: {ci.qty}</div>
                       </div>
-                      <div className="text-sm text-right min-w-[90px] text-[#2F3E77] font-semibold">{nf.format(product.price)} {currency}</div>
                     </div>
-                  );
-                })}
+                    <div className="text-sm text-right min-w-[90px] text-[#2F3E77] font-semibold">{nf.format(ci.price ?? 0)} {currency}</div>
+                  </div>
+                ))}
 
                 <div className="border-t pt-4 mt-2 space-y-2 text-sm">
                   <div className="flex justify-between"><span className="text-[#2F3E77] font-medium">Subtotal</span><span className="min-w-[90px] text-right text-gray-900">{nf.format(order.subtotal)} {currency}</span></div>
@@ -272,6 +435,8 @@ export default function OrderDetailsPage() {
             )}
           </div>
         </div>
+
+        {/* Payment receipt section removed: now handled at checkout */}
 
         {/* Cancellation Policy */}
         <div className="mt-6">

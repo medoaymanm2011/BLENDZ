@@ -1,17 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useLocale } from 'next-intl';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { products as productsData, type Product as ProductData } from '@/data/products';
-import { brands as brandsData } from '@/data/brands';
-import { categories as categoriesData } from '@/data/categories';
+import type { Product as ProductData } from '@/data/products';
 import { useStore } from '@/context/StoreContext';
 import { useToast } from '@/context/ToastContext';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, usePathname, useRouter } from 'next/navigation';
 import BrandProductCard from '@/components/BrandProductCard';
 
 export default function ProductPage() {
@@ -20,9 +18,10 @@ export default function ProductPage() {
   const [qty, setQty] = useState(1);
   const [colorIdx, setColorIdx] = useState(0);
   const store = useStore();
-  const { showToast } = useToast();
-  const router = useRouter();
+  const { showToast, showToastCustom } = useToast();
   const { slug } = useParams<{ slug: string }>();
+  const router = useRouter();
+  const pathname = usePathname();
 
   type DbProduct = {
     _id: string;
@@ -34,19 +33,14 @@ export default function ProductPage() {
     brandId?: string | null;
     categoryId?: string | null;
     images?: { url: string }[];
+    color?: string | null;
   };
   const [dbProduct, setDbProduct] = useState<DbProduct | null>(null);
   const [loadingDb, setLoadingDb] = useState(true);
+  const [related, setRelated] = useState<ProductData[]>([]);
+  const [loadingRelated, setLoadingRelated] = useState(false);
 
-  // Legacy numeric id redirect support (e.g., /product/123 -> /product/some-slug)
-  useEffect(() => {
-    if (typeof slug === 'string' && /^\d+$/.test(slug)) {
-      const numericId = Number(slug);
-      const match = productsData.find((p) => p.id === numericId);
-      const target = match ? `/${locale}/product/${match.slug}` : `/${locale}`;
-      router.replace(target);
-    }
-  }, [slug, router, locale]);
+  // If slug is numeric (legacy), we will simply try fetching by that slug string; no static fallback redirect.
 
   // Fetch DB product by slug
   useEffect(() => {
@@ -67,13 +61,76 @@ export default function ProductPage() {
     return () => { active = false; };
   }, [slug]);
 
-  const product: ProductData | undefined = useMemo(
-    () => (typeof slug === 'string' ? productsData.find((p) => p.slug === slug) : undefined),
-    [slug]
-  );
+  // No static product fallback
+
+  // Map DB product to card data shape (for BrandProductCard)
+  function mapDbToCard(db: any): ProductData {
+    const hasSale = typeof db?.salePrice === 'number' && db.salePrice >= 0 && db.salePrice < db.price;
+    const price = hasSale ? db.salePrice : db.price;
+    const originalPrice = hasSale ? db.price : undefined;
+    const firstImage = Array.isArray(db?.images) && db.images.length ? db.images[0]?.url : undefined;
+    const discount = hasSale && originalPrice ? Math.round(((originalPrice - price) / originalPrice) * 100) : undefined;
+    return {
+      id: db?._id || db?.slug || Math.random(),
+      slug: db?.slug || String(db?._id || ''),
+      name: { ar: db?.name || '', en: db?.name || '' },
+      brandSlug: 'brand',
+      categorySlugs: [],
+      price,
+      originalPrice,
+      images: firstImage ? [firstImage] : [],
+      isNew: false,
+      discount: discount && discount > 0 ? discount : undefined,
+      tags: Array.isArray(db?.sectionTypes) ? db.sectionTypes : undefined,
+      // extra field for card to decide OOS
+      stock: typeof db?.stock === 'number' ? db.stock : undefined,
+    } as any as ProductData;
+  }
+
+  // Fetch dynamic related when DB product is available
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!dbProduct) { setRelated([]); return; }
+      try {
+        setLoadingRelated(true);
+        const url = new URL('/api/products', window.location.origin);
+        if (dbProduct.categoryId) url.searchParams.set('categories[0]', dbProduct.categoryId);
+        if (dbProduct.brandId) url.searchParams.set('brands[0]', dbProduct.brandId);
+        const res = await fetch(url.toString(), { cache: 'no-store' });
+        const data = await res.json();
+        if (cancelled) return;
+        const items = Array.isArray(data?.products) ? data.products : [];
+        const mapped = items
+          .filter((p: any) => (p._id || p.slug) !== (dbProduct._id || dbProduct.slug))
+          .map(mapDbToCard)
+          .slice(0, 6);
+        setRelated(mapped);
+      } catch {
+        if (!cancelled) setRelated([]);
+      } finally {
+        if (!cancelled) setLoadingRelated(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [dbProduct]);
+
+  // Notify admin if stock is low or zero (ensure hook order is stable by placing before any conditional returns)
+  useEffect(() => {
+    if (!dbProduct) return;
+    const s = dbProduct.stock ?? 0;
+    if (s <= 2) {
+      fetch('/api/admin/low-stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId: dbProduct._id, slug, stock: s }),
+        cache: 'no-store',
+      }).catch(() => {});
+    }
+  }, [dbProduct?._id, dbProduct?.stock, slug]);
 
   // While loading DB and no mock product, show a lightweight loading UI
-  if (loadingDb && !dbProduct && !product) {
+  if (loadingDb && !dbProduct) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -85,7 +142,7 @@ export default function ProductPage() {
     );
   }
 
-  // Build a unified view model from DB or mock product to render the SAME layout
+  // Build a unified view model from DB product
   const isDb = !!dbProduct;
   const view = isDb && !loadingDb && dbProduct
     ? {
@@ -100,22 +157,11 @@ export default function ProductPage() {
         images: (dbProduct.images || []).map(im => im.url).filter(Boolean) as string[],
         categorySlug: undefined as string | undefined,
         stock: dbProduct.stock,
-      }
-    : product
-    ? {
-        id: product.id,
-        title: locale === 'ar' ? product.name.ar : product.name.en,
-        brandLabel: (brandsData.find(b => b.slug === product.brandSlug)?.name ?? product.brandSlug) || '',
-        price: product.price,
-        originalPrice: product.originalPrice,
-        discount: product.discount,
-        images: (product.images || []) as string[],
-        categorySlug: product.categorySlugs?.[0],
-        stock: 5,
+        color: dbProduct.color || undefined,
       }
     : null;
 
-  if (!product && !loadingDb && !dbProduct) {
+  if (!loadingDb && !dbProduct) {
     return (
       <div className="min-h-screen bg-gray-50">
         <Header />
@@ -142,9 +188,11 @@ export default function ProductPage() {
   const isUrl = (s?: string) => !!s && /^(https?:)?\//.test(s);
   const inWishlist = store.isInWishlist(view.id);
   const currency = locale === 'ar' ? 'جنية' : 'EGP';
-  const categoryObj = categoriesData.find(c => c.slug === (view.categorySlug || ''));
-  const categoryName = categoryObj ? (locale === 'ar' ? categoryObj.name.ar : categoryObj.name.en) : (view.categorySlug || 'All');
-  const colorOptions: string[] = [locale === 'ar' ? 'أحمر' : 'Red'];
+  const categoryName = view.categorySlug || (locale === 'ar' ? 'عام' : 'All');
+  const colorOptions: string[] =
+    view.color ? [view.color] : [locale === 'ar' ? 'أحمر' : 'Red'];
+  const isOut = (view.stock || 0) <= 0;
+
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -153,10 +201,14 @@ export default function ProductPage() {
         <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
           <Link href={`/${locale}`} className="hover:text-purple-600">{locale === 'ar' ? 'الرئيسية' : 'Home'}</Link>
           <span>/</span>
-          <Link href={`/${locale}/category/${encodeURIComponent(view.categorySlug || 'all')}`} className="hover:text-purple-600">
-            {categoryName}
-          </Link>
-          <span>/</span>
+          {view.categorySlug && (
+            <>
+              <Link href={`/${locale}/category/${encodeURIComponent(view.categorySlug || 'all')}`} className="hover:text-purple-600">
+                {categoryName}
+              </Link>
+              <span>/</span>
+            </>
+          )}
           <span className="text-gray-700">{title}</span>
         </div>
 
@@ -206,7 +258,9 @@ export default function ProductPage() {
                 {brandName && (
                   <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full">{brandName}</span>
                 )}
-                <span className="ml-auto inline-flex items-center gap-2 text-xs text-[#2B356D] bg-white px-2.5 py-1 rounded-full border border-[#2B356D]/30">{locale === 'ar' ? `في المخزون - ${isDb && dbProduct ? dbProduct.stock : 5} قطع` : `In Stock - ${isDb && dbProduct ? dbProduct.stock : 5} available`}</span>
+                <span className={`ml-auto inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border ${isOut ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-[#2B356D] bg-white border-[#2B356D]/30'}`}>
+                  {isOut ? (locale === 'ar' ? 'غير متوفر' : 'Out of stock') : (locale === 'ar' ? `في المخزون - ${view.stock} قطع` : `In Stock - ${view.stock} available`)}
+                </span>
               </div>
 
               <h1 className="text-2xl font-bold text-gray-900">{title}</h1>
@@ -244,29 +298,96 @@ export default function ProductPage() {
                     </button>
                   ))}
                 </div>
-                <span className="inline-flex items-center mt-1 text-xs text-[#2B356D] bg-white px-2.5 py-1 rounded-full border border-[#2B356D]/30">{locale === 'ar' ? 'متوفر - 5 قطع' : 'In Stock - 5 available'}</span>
+                <span className={`inline-flex items-center mt-1 text-xs px-2.5 py-1 rounded-full border ${isOut ? 'text-rose-700 bg-rose-50 border-rose-200' : 'text-[#2B356D] bg-white border-[#2B356D]/30'}`}>
+                  {isOut ? (locale === 'ar' ? 'غير متوفر' : 'Out of stock') : (locale === 'ar' ? `متوفر - ${view.stock} قطع` : `In Stock - ${view.stock} available`)}
+                </span>
               </div>
 
               {/* Quantity */}
               <div>
                 <label className="block text-sm font-medium text-[#2B356D] mb-1">{locale === 'ar' ? 'الكمية' : 'Quantity'}</label>
                 <div className="inline-flex items-center gap-2">
-                  <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="w-8 h-8 rounded-md border border-gray-300 hover:bg-gray-50 text-[#2B356D]">-</button>
+                  <button disabled={isOut} onClick={() => setQty((q) => Math.max(1, q - 1))} className={`w-8 h-8 rounded-md border ${isOut ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60' : 'border-gray-300 hover:bg-gray-50'} text-[#2B356D]`}>-</button>
                   <div className="min-w-[2.5rem] text-center font-semibold text-[#2B356D]">{qty}</div>
-                  <button onClick={() => setQty((q) => Math.min(10, q + 1))} className="w-8 h-8 rounded-md border border-gray-300 hover:bg-gray-50 text-[#2B356D]">+</button>
+                  <button
+                    onClick={() => setQty((q) => Math.min(view.stock, q + 1))}
+                    disabled={isOut || qty >= view.stock}
+                    className={`w-8 h-8 rounded-md border text-[#2B356D] ${(isOut || qty >= view.stock) ? 'border-gray-200 bg-gray-100 cursor-not-allowed opacity-60' : 'border-gray-300 hover:bg-gray-50'}`}
+                  >
+                    +
+                  </button>
                 </div>
               </div>
 
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => { store.addToCart(view.id, qty); showToast(locale === 'ar' ? 'تمت الإضافة إلى السلة' : 'Added to cart'); }}
-                  className="flex-1 bg-[#2b356d] text-white px-6 py-3 rounded-md hover:bg-[#222a59] shadow-sm"
+                  disabled={isOut}
+                  onClick={async () => {
+                    if (isOut) return;
+                    // Require login before adding to cart
+                    try {
+                      const res = await fetch('/api/auth/me', { credentials: 'include' });
+                      const data = await res.json();
+                      if (!res.ok || !data?.user) {
+                        showToastCustom({
+                          title: locale === 'ar' ? 'تسجيل الدخول مطلوب' : 'Login required',
+                          description: locale === 'ar' ? 'يرجى تسجيل الدخول للمتابعة' : 'Please log in to continue',
+                          variant: 'danger',
+                          duration: 1500,
+                        });
+                        const target = pathname || `/${locale}`;
+                        router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+                        return;
+                      }
+                    } catch {
+                      showToastCustom({
+                        title: locale === 'ar' ? 'تسجيل الدخول مطلوب' : 'Login required',
+                        description: locale === 'ar' ? 'يرجى تسجيل الدخول للمتابعة' : 'Please log in to continue',
+                        variant: 'danger',
+                        duration: 1500,
+                      });
+                      const target = pathname || `/${locale}`;
+                      router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+                      return;
+                    }
+                    await store.addToCart(view.id, qty);
+                    showToast(locale === 'ar' ? 'تمت الإضافة إلى السلة' : 'Added to cart');
+                  }}
+                  className={`flex-1 px-6 py-3 rounded-md shadow-sm ${isOut ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-[#2b356d] text-white hover:bg-[#222a59]'}`}
                 >
-                  {locale === 'ar' ? 'إضافة إلى السلة' : 'Add to Cart'}
+                  {isOut ? (locale === 'ar' ? 'غير متوفر' : 'Out of stock') : (locale === 'ar' ? 'إضافة إلى السلة' : 'Add to Cart')}
                 </button>
                 <button
                   aria-label="Wishlist"
-                  onClick={() => {
+                  disabled={isOut}
+                  onClick={async () => {
+                    if (isOut) return;
+                    // Require login before wishlist operations
+                    try {
+                      const res = await fetch('/api/auth/me', { credentials: 'include' });
+                      const data = await res.json();
+                      if (!res.ok || !data?.user) {
+                        showToastCustom({
+                          title: locale === 'ar' ? 'تسجيل الدخول مطلوب' : 'Login required',
+                          description: locale === 'ar' ? 'يرجى تسجيل الدخول للمتابعة' : 'Please log in to continue',
+                          variant: 'danger',
+                          duration: 1500,
+                        });
+                        const target = pathname || `/${locale}`;
+                        router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+                        return;
+                      }
+                    } catch {
+                      showToastCustom({
+                        title: locale === 'ar' ? 'تسجيل الدخول مطلوب' : 'Login required',
+                        description: locale === 'ar' ? 'يرجى تسجيل الدخول للمتابعة' : 'Please log in to continue',
+                        variant: 'danger',
+                        duration: 1500,
+                      });
+                      const target = pathname || `/${locale}`;
+                      router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+                      return;
+                    }
                     if (inWishlist) {
                       store.removeFromWishlist(view.id);
                       showToast(locale === 'ar' ? 'تمت الإزالة من المفضلة' : 'Removed from wishlist');
@@ -275,7 +396,7 @@ export default function ProductPage() {
                       showToast(locale === 'ar' ? 'أُضيف إلى المفضلة' : 'Added to wishlist');
                     }
                   }}
-                  className={`w-12 h-12 rounded-md border flex items-center justify-center bg-white ${inWishlist ? 'border-rose-300 text-rose-600' : 'border-gray-300 hover:bg-gray-50 text-gray-500'}`}
+                  className={`w-12 h-12 rounded-md border flex items-center justify-center ${isOut ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-60' : 'bg-white'} ${inWishlist ? 'border-rose-300 text-rose-600' : (!isOut ? 'border-gray-300 hover:bg-gray-50 text-gray-500' : '')}`}
                 >
                   <svg viewBox="0 0 24 24" className="w-5 h-5" fill={inWishlist ? 'currentColor' : 'none'} stroke={inWishlist ? 'currentColor' : 'currentColor'}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
                 </button>
@@ -293,21 +414,18 @@ export default function ProductPage() {
           </div>
         </div>
 
-        {/* Related products */}
-        <div className="mt-10">
-          <div className="flex items-center gap-3 mb-4">
-            <span className="inline-flex w-7 h-7 items-center justify-center rounded-md bg-blue-100 text-blue-700">🏷️</span>
-            <h3 className="text-xl font-bold text-gray-900">{locale === 'ar' ? 'منتجات ذات صلة' : 'Related Products'}</h3>
+        {/* Related products (only render when there are items) */}
+        {(isDb && !loadingRelated && related.length > 0) && (
+          <div className="mt-10">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="inline-flex w-7 h-7 items-center justify-center rounded-md bg-blue-100 text-blue-700">🏷️</span>
+              <h3 className="text-xl font-bold text-gray-900">{locale === 'ar' ? 'منتجات ذات صلة' : 'Related Products'}</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {related.map((p) => (<BrandProductCard key={`${p.slug}-${p.id}`} product={p} />))}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {productsData
-              .filter(p => !isDb && product ? p.id !== product.id && (p.categorySlugs.some(c => product.categorySlugs.includes(c)) || p.brandSlug === product.brandSlug) : true)
-              .slice(0, 6)
-              .map(p => (
-                <BrandProductCard key={p.id} product={p} />
-              ))}
-          </div>
-        </div>
+        )}
       </div>
       <Footer />
     </div>

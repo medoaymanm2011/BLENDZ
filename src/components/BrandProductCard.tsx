@@ -4,21 +4,27 @@ import { useState } from 'react';
 import LocaleLink from './LocaleLink';
 import Image from 'next/image';
 import { useLocale, useTranslations } from 'next-intl';
-import { brands as brandsData } from '@/data/brands';
 import { type Product as ProductData } from '@/data/products';
 import { useStore } from '@/context/StoreContext';
 import { useToast } from '@/context/ToastContext';
+import { usePathname, useRouter } from 'next/navigation';
 
-export default function BrandProductCard({ product }: { product: ProductData }) {
+type CardProduct = ProductData & { stock?: number };
+
+export default function BrandProductCard({ product }: { product: CardProduct }) {
   const locale = useLocale();
   const t = useTranslations();
   const { addToCart, addToWishlist, removeFromWishlist, isInWishlist } = useStore();
-  const { showToast } = useToast();
+  const { showToast, showToastCustom } = useToast();
+  const router = useRouter();
+  const pathname = usePathname();
   const [imgLoaded, setImgLoaded] = useState(
     !(product.images && product.images[0] && /^(https?:)?\//.test(product.images[0]))
   );
 
-  const brandName = brandsData.find(b => b.slug === product.brandSlug)?.name ?? product.brandSlug;
+  // Prefer product.brandSlug (already human-friendly if backend provided), otherwise hide chip
+  const brandName = product.brandSlug || '';
+  const outOfStock = typeof (product as any).stock === 'number' && (product as any).stock <= 0;
 
   return (
     <div className="group relative block bg-white rounded-2xl shadow-sm transition-all overflow-hidden border border-gray-200 will-change-transform hover:-translate-y-1 hover:scale-[1.01] hover:shadow-2xl hover:border-blue-100 hover:ring-1 hover:ring-blue-200/60">
@@ -40,6 +46,8 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
               {t('products.new')}
             </span>
           ) : null}
+
+          {/* Removed OOS overlay badge per request */}
 
           {/* Skeleton */}
           {!imgLoaded && (
@@ -67,9 +75,37 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
       <button
         type="button"
         aria-label="Toggle wishlist"
-        onClick={(e) => {
+        disabled={outOfStock}
+        onClick={async (e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (outOfStock) return;
+          // Require login before wishlist actions
+          try {
+            const res = await fetch('/api/auth/me', { credentials: 'include' });
+            const data = await res.json();
+            if (!res.ok || !data?.user) {
+              showToastCustom({
+                title: t('auth.loginRequired.title'),
+                description: t('auth.loginRequired.description'),
+                variant: 'danger',
+                duration: 1500,
+              });
+              const target = pathname || `/${locale}`;
+              router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+              return;
+            }
+          } catch {
+            showToastCustom({
+              title: t('auth.loginRequired.title'),
+              description: t('auth.loginRequired.description'),
+              variant: 'danger',
+              duration: 1500,
+            });
+            const target = pathname || `/${locale}`;
+            router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+            return;
+          }
           if (isInWishlist(product.id)) {
             removeFromWishlist(product.id);
             showToast(t('toasts.removedFromWishlist'));
@@ -78,7 +114,7 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
             showToast(t('toasts.addedToWishlist'));
           }
         }}
-        className="absolute top-3 left-3 z-20 inline-flex items-center justify-center w-9 h-9 rounded-full bg-white/90 hover:bg-white shadow-md"
+        className={`absolute top-3 left-3 z-20 inline-flex items-center justify-center w-9 h-9 rounded-full shadow-md ${outOfStock ? 'bg-gray-200 cursor-not-allowed opacity-60' : 'bg-white/90 hover:bg-white'}`}
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -94,9 +130,11 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
       {/* Content */}
       <div className="p-4">
         {/* Brand chip below image, left side */}
-        <span className="inline-block mb-2 bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full">
-          {brandName}
-        </span>
+        {brandName && (
+          <span className="inline-block mb-2 bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-1 rounded-full">
+            {brandName}
+          </span>
+        )}
         <h3 className="font-semibold text-gray-800 mb-2 text-left leading-snug line-clamp-2">
           {locale === 'ar' ? product.name.ar : product.name.en}
         </h3>
@@ -114,11 +152,42 @@ export default function BrandProductCard({ product }: { product: ProductData }) 
       <div className="px-4 pb-4">
         <button
           type="button"
-          onClick={() => { addToCart(product.id, 1); showToast(t('toasts.addedToCart')); }}
-          className="w-full inline-flex items-center justify-center gap-2 bg-blue-900 text-white py-2 rounded-lg hover:bg-blue-800 transition-colors"
+          disabled={outOfStock}
+          onClick={async () => {
+            if (outOfStock) return;
+            // Require login before cart actions
+            try {
+              const res = await fetch('/api/auth/me', { credentials: 'include' });
+              const data = await res.json();
+              if (!res.ok || !data?.user) {
+                showToastCustom({
+                  title: t('auth.loginRequired.title'),
+                  description: t('auth.loginRequired.description'),
+                  variant: 'danger',
+                  duration: 1500,
+                });
+                const target = pathname || `/${locale}`;
+                router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+                return;
+              }
+            } catch {
+              showToastCustom({
+                title: t('auth.loginRequired.title'),
+                description: t('auth.loginRequired.description'),
+                variant: 'danger',
+                duration: 1500,
+              });
+              const target = pathname || `/${locale}`;
+              router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
+              return;
+            }
+            await addToCart(product.id, 1);
+            showToast(t('toasts.addedToCart'));
+          }}
+          className={`w-full inline-flex items-center justify-center gap-2 py-2 rounded-lg transition-colors ${outOfStock ? 'bg-gray-200 text-gray-500 cursor-not-allowed' : 'bg-blue-900 text-white hover:bg-blue-800'}`}
         >
           <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z"/><path strokeLinecap="round" strokeLinejoin="round" d="M9 8V7a3 3 0 0 1 6 0v1"/></svg>
-          {t('products.addToCart')}
+          {outOfStock ? (locale === 'ar' ? 'غير متوفر' : 'Out of stock') : t('products.addToCart')}
         </button>
       </div>
     </div>

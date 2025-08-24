@@ -10,6 +10,7 @@ import SortDropdown from '@/components/SortDropdown';
 import ProductSearchInput from '@/components/ProductSearchInput';
 import { useStore } from '@/context/StoreContext';
 import { useToast } from '@/context/ToastContext';
+import LocaleLink from '@/components/LocaleLink';
 
 // No local mock data. Use shared products data so images/info match homepage.
 
@@ -55,7 +56,7 @@ function CardFromDb({ p }: { p: DbProduct }) {
         <div className="absolute -top-8 -left-8 w-40 h-40 bg-white/40 rounded-full blur-2xl" />
         <div className="absolute -bottom-10 -right-10 w-48 h-48 bg-blue-200/20 rounded-full blur-3xl" />
       </div>
-      <a href={`/product/${p.slug || (p as any)._id}`} className="block">
+      <LocaleLink href={`/product/${p.slug || (p as any)._id}`} className="block">
         <div className="relative aspect-[4/5] md:aspect-[3/4] bg-gray-100 overflow-hidden">
           {hasDiscount ? (
             <span className="absolute top-3 right-3 z-10 bg-pink-500 text-white text-xs font-bold px-2.5 py-1 rounded-full">
@@ -86,7 +87,7 @@ function CardFromDb({ p }: { p: DbProduct }) {
             </div>
           </div>
         </div>
-      </a>
+      </LocaleLink>
 
       <button
         type="button"

@@ -13,7 +13,11 @@ export async function registerHandler(req: NextRequest) {
   const json = await req.json();
   const parsed = registerSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    const flat = parsed.error.flatten();
+    return NextResponse.json(
+      { error: { code: 'VALIDATION_FAILED', message: 'Validation failed', fieldErrors: flat.fieldErrors } },
+      { status: 400 }
+    );
   }
   const { name, email, password } = parsed.data;
   const normalizedEmail = String(email).toLowerCase().trim();
@@ -29,7 +33,7 @@ export async function registerHandler(req: NextRequest) {
       try { await sendVerificationEmail(exists.email, verificationCode, locale); } catch (e) { try { console.error('Email send failed (register resend):', e); } catch {} }
       return NextResponse.json({ user: { id: exists._id, name: exists.name, email: exists.email, role: exists.role }, requiresVerification: true }, { status: 200 });
     }
-    return NextResponse.json({ error: 'Email already registered' }, { status: 409 });
+    return NextResponse.json({ error: { code: 'EMAIL_EXISTS', message: 'Email already registered' } }, { status: 409 });
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -45,21 +49,25 @@ export async function loginHandler(req: NextRequest) {
   const json = await req.json();
   const parsed = loginSchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+    const flat = parsed.error.flatten();
+    return NextResponse.json(
+      { error: { code: 'VALIDATION_FAILED', message: 'Validation failed', fieldErrors: flat.fieldErrors } },
+      { status: 400 }
+    );
   }
   const { email, password } = parsed.data;
   const normalizedEmail = String(email).toLowerCase().trim();
   const user = await User.findOne({ email: normalizedEmail });
-  if (!user) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
+  if (!user) return NextResponse.json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' } }, { status: 401 });
   const ok = await bcrypt.compare(password, user.passwordHash);
-  if (!ok) return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-  if (!user.verified) return NextResponse.json({ error: 'Email not verified' }, { status: 403 });
+  if (!ok) return NextResponse.json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid credentials' } }, { status: 401 });
+  if (!user.verified) return NextResponse.json({ error: { code: 'EMAIL_NOT_VERIFIED', message: 'Email not verified' } }, { status: 403 });
 
   const res = NextResponse.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role } });
   try {
     setAuthCookie(res, { sub: String(user._id), email: user.email, role: user.role });
   } catch (e) {
-    return NextResponse.json({ error: 'Failed to establish session' }, { status: 500 });
+    return NextResponse.json({ error: { code: 'SESSION_ERROR', message: 'Failed to establish session' } }, { status: 500 });
   }
   return res;
 }

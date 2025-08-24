@@ -164,5 +164,7 @@
   "stores.jeddah.hours": "Daily 10:00 AM - 11:00 PM",
   "stores.dammam.name": "Dammam - Al Shate'a Branch",
   "stores.dammam.address": "Al Shate'a District, Dammam, Saudi Arabia",
-  "stores.dammam.hours": "Daily 9:30 AM - 10:30 PM"
+  "stores.dammam.hours": "Daily 9:30 AM - 10:30 PM",
+  "common.loading": "Loading...",
+  "common.noData": "No data to display"
 }

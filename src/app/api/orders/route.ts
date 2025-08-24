@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+export const runtime = 'nodejs';
 import { connectToDB } from '@/lib/db';
 import { verifyToken, JwtPayload } from '@/lib/jwt';
 import { Order, type IOrder, type OrderStatus } from '@/models/Order';
@@ -75,7 +76,15 @@ export async function POST(req: NextRequest) {
         image: it.image,
       })),
       totals: { subtotal, shipping, total, currency },
-      payment: { method: String(body?.payment?.method || 'cod'), status: 'pending' },
+      payment: {
+        method: String(body?.payment?.method || 'cod'),
+        status: 'pending',
+        // Optional fields for bank transfer / Instapay
+        channel: body?.payment?.channel ?? undefined,
+        instapayHandle: body?.payment?.instapayHandle ?? undefined,
+        bankAccount: body?.payment?.bankAccount ?? undefined,
+        receiptUrl: body?.payment?.receiptUrl ?? undefined,
+      },
       status: 'processing',
       tracking: { history: [] },
     };

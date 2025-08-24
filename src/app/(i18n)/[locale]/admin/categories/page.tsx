@@ -28,6 +28,7 @@ export default function AdminCategoriesPage() {
   const [form, setForm] = useState<Category>({ name: '', slug: '', image: '', sortOrder: 0 });
   const [slugTouched, setSlugTouched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
@@ -36,6 +37,7 @@ export default function AdminCategoriesPage() {
     const seg = pathname.split('/').filter(Boolean)[0];
     return seg || '';
   }, [pathname]);
+  const isAR = locale === 'ar';
   const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN as string | undefined;
 
   async function load() {
@@ -77,8 +79,10 @@ export default function AdminCategoriesPage() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch('/api/categories', {
-        method: 'POST',
+      const url = editingId ? `/api/categories/${editingId}` : '/api/categories';
+      const method = editingId ? 'PATCH' : 'POST';
+      const res = await fetch(url, {
+        method,
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
@@ -88,6 +92,7 @@ export default function AdminCategoriesPage() {
       });
       if (!res.ok) throw new Error('Create failed');
       setForm({ name: '', slug: '', image: '', sortOrder: 0 });
+      setEditingId(null);
       await load();
     } catch (e) {
       console.error(e);
@@ -110,18 +115,30 @@ export default function AdminCategoriesPage() {
     } catch (e) { console.error(e); }
   }
 
+  function onStartEdit(c: Category) {
+    setEditingId(c._id || null);
+    setSlugTouched(true);
+    setForm({ name: c.name || '', slug: c.slug || '', image: c.image || '', sortOrder: c.sortOrder ?? 0 });
+  }
+
+  function onCancelEdit() {
+    setEditingId(null);
+    setSlugTouched(false);
+    setForm({ name: '', slug: '', image: '', sortOrder: 0 });
+  }
+
   if (authChecking) {
     return (
       <div className="px-4 py-12">
-        <div className="text-center text-gray-600">Checking permissions...</div>
+        <div className="text-center text-gray-600">{isAR ? 'جارٍ التحقق من الصلاحيات...' : 'Checking permissions...'}</div>
       </div>
     );
   }
 
   return (
-    <div className="text-gray-900">
-      <div className="px-1 py-2 space-y-8">
-        <h1 className="text-2xl font-bold">Admin • Categories</h1>
+    <div className="text-gray-900" dir={isAR ? 'rtl' : 'ltr'}>
+      <div className={`px-1 py-2 space-y-8 ${isAR ? 'text-right' : ''}`}>
+        <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • التصنيفات' : 'Admin • Categories'}</h1>
 
         <form onSubmit={onCreate} className="grid md:grid-cols-5 gap-4 bg-white p-4 rounded-xl shadow">
           <input
@@ -130,32 +147,54 @@ export default function AdminCategoriesPage() {
               const name = e.target.value;
               setForm((f)=> ({ ...f, name, slug: slugTouched ? f.slug : slugify(name) }));
             }}
-            placeholder="Name"
+            placeholder={isAR ? 'الاسم' : 'Name'}
             className="input input-bordered w-full p-2 rounded border border-gray-300"
           />
           <input
             value={form.slug}
             onChange={(e)=>{ setSlugTouched(true); setForm({ ...form, slug: slugify(e.target.value) }); }}
             onFocus={()=> setSlugTouched(true)}
-            placeholder="Slug"
+            placeholder={isAR ? 'المعرف (Slug)' : 'Slug'}
             className="input input-bordered w-full p-2 rounded border border-gray-300"
           />
           <div className="md:col-span-2">
-            <input value={form.image} onChange={(e)=>setForm({ ...form, image: e.target.value })} placeholder="Image URL (Cloudinary)" className="input input-bordered w-full p-2 rounded border border-gray-300" />
-            <div className="mt-2">
-              <CloudinaryUploader
-                folder="categories"
-                buttonText="Upload from device"
-                buttonClassName="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2F3E77] text-white hover:brightness-95 cursor-pointer"
-                onUploaded={(url)=> setForm((f)=> ({ ...f, image: url }))}
-              />
+            <div className="flex items-start gap-3">
+              <div className="flex-1">
+                <input
+                  value={form.image}
+                  onChange={(e)=>setForm({ ...form, image: e.target.value })}
+                  placeholder={isAR ? 'رابط الصورة (Cloudinary)' : 'Image URL (Cloudinary)'}
+                  className="input input-bordered w-full p-2 rounded border border-gray-300"
+                />
+                <div className="mt-2">
+                  <CloudinaryUploader
+                    folder="categories"
+                    buttonText={isAR ? 'رفع من الجهاز' : 'Upload from device'}
+                    buttonClassName="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-[#2F3E77] text-white hover:brightness-95 cursor-pointer"
+                    onUploaded={(url)=> setForm((f)=> ({ ...f, image: url }))}
+                  />
+                </div>
+                <div className="mt-1 text-xs text-gray-500">{isAR ? 'ألصق رابطًا أو ارفع صورة للمعاينة.' : 'Paste a URL or upload to preview.'}</div>
+              </div>
+              <div className="w-16 h-16 rounded overflow-hidden border border-gray-200 bg-gray-100 flex items-center justify-center shrink-0">
+                {form.image ? (
+                  <img src={form.image} alt="preview" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-[10px] text-gray-400">{isAR ? 'لا توجد صورة' : 'No image'}</span>
+                )}
+              </div>
             </div>
           </div>
-          <div className="md:col-span-5 text-xs text-gray-500">Path preview: <span className="font-mono">/category/{form.slug || '...'}</span></div>
-          <input type="number" value={form.sortOrder ?? 0} onChange={(e)=>setForm({ ...form, sortOrder: Number(e.target.value) })} placeholder="Sort" className="input input-bordered w-full p-2 rounded border border-gray-300" />
-          <button disabled={loading} className="btn bg-[#2F3E77] text-white rounded px-4 py-2 md:col-span-5 hover:brightness-95 disabled:opacity-60">
-            {loading ? 'Adding...' : 'Add Category'}
-          </button>
+          <div className="md:col-span-5 text-xs text-gray-500">{isAR ? 'مسار المعاينة:' : 'Path preview:'} <span className="font-mono">/category/{form.slug || '...'}</span></div>
+          <input type="number" value={form.sortOrder ?? 0} onChange={(e)=>setForm({ ...form, sortOrder: Number(e.target.value) })} placeholder={isAR ? 'الترتيب' : 'Sort'} className="input input-bordered w-full p-2 rounded border border-gray-300" />
+          <div className="md:col-span-5 flex items-center gap-3">
+            <button disabled={loading} className="btn bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">
+              {loading ? (isAR ? 'جارٍ الحفظ...' : 'Saving...') : (editingId ? (isAR ? 'تحديث التصنيف' : 'Update Category') : (isAR ? 'إضافة تصنيف' : 'Add Category'))}
+            </button>
+            {editingId ? (
+              <button type="button" onClick={onCancelEdit} className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200">{isAR ? 'إلغاء' : 'Cancel'}</button>
+            ) : null}
+          </div>
         </form>
 
         <div className="grid gap-3">
@@ -168,7 +207,10 @@ export default function AdminCategoriesPage() {
                   <div className="text-xs text-gray-500">/{c.slug}</div>
                 </div>
               </div>
-              <button onClick={()=>onDelete(c._id)} className="text-red-600 hover:underline">Delete</button>
+              <div className="flex items-center gap-3">
+                <button onClick={()=>onStartEdit(c)} className="text-blue-700 hover:underline">{isAR ? 'تعديل' : 'Edit'}</button>
+                <button onClick={()=>onDelete(c._id)} className="text-red-600 hover:underline">{isAR ? 'حذف' : 'Delete'}</button>
+              </div>
             </div>
           ))}
         </div>

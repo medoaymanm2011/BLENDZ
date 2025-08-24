@@ -9,8 +9,6 @@ import { useToast } from '@/context/ToastContext';
 import Image from 'next/image';
 import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '@/context/StoreContext';
-import { brands as brandsData } from '@/data/brands';
-import { categories as categoriesData } from '@/data/categories';
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -22,6 +20,9 @@ export default function Header() {
   const [quickBackdropReady, setQuickBackdropReady] = useState(false);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const [user, setUser] = useState<{ name: string; email: string; role?: string } | null>(null);
+  type ApiCategory = { _id: string; slug: string; name?: string; nameObj?: { ar?: string; en?: string } };
+  const [categories, setCategories] = useState<ApiCategory[]>([]);
+  const [metaLoaded, setMetaLoaded] = useState(false);
   const t = useTranslations();
   const locale = useLocale();
   const pathname = usePathname();
@@ -41,8 +42,26 @@ export default function Header() {
     prefetch(`/${locale}/wishlist`);
   }, [locale]);
 
-  // Use live categories data for dropdown to match site exactly
-  const dropdownCategories = categoriesData;
+  // Load categories for menus
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const cRes = await fetch('/api/categories', { cache: 'no-store' });
+        if (!active) return;
+        const cJson = await cRes.json();
+        setCategories(Array.isArray(cJson?.categories) ? cJson.categories : []);
+      } catch {
+        setCategories([]);
+      } finally {
+        if (active) setMetaLoaded(true);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  // Use categories with a preferred order
+  const dropdownCategories = categories;
   const categoryOrder = [
     'tghthy-ordaaah',
     'aadadat-skatat-hlmat',
@@ -139,11 +158,8 @@ export default function Header() {
         duration: 1500,
       });
     }
-    try {
-      const target = opts?.redirectTo || pathname || `/${locale}`;
-      sessionStorage.setItem('post_login_redirect', target);
-    } catch {}
-    router.push(`/${locale}/account`);
+    const target = opts?.redirectTo || pathname || `/${locale}`;
+    router.push(`/${locale}/account?redirect=${encodeURIComponent(target)}`);
   };
   const switchHref = (() => {
     try {
@@ -172,7 +188,6 @@ export default function Header() {
                   alt="BLENDZ"
                   width={160}
                   height={40}
-                  className="h-10 w-auto"
                   priority
                 />
                 <span className="sr-only">{t('brand.name')}</span>
@@ -189,65 +204,7 @@ export default function Header() {
               >
                 {t('nav.home')}
               </Link>
-              {/* Brands hover dropdown */}
-              <div className="relative group">
-                <Link
-                  prefetch
-                  href={`/${locale}/brands`}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-gray-200 bg-white/70 hover:bg-white text-gray-700 hover:text-blue-700 shadow-sm"
-                  onMouseEnter={() => prefetch(`/${locale}/brands`)}
-                >
-                  <span>{t('nav.brands')}</span>
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"/></svg>
-                </Link>
-                <div className="absolute left-0 mt-2 bg-white rounded-xl shadow-lg ring-1 ring-black/5 p-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition z-50">
-                  <div className="grid grid-cols-2 gap-x-12 gap-y-3 min-w-[460px]">
-                    {brandsData.map((b) => (
-                      <Link
-                        key={b.slug}
-                        href={`/${locale}/brands/${encodeURIComponent(b.slug)}`}
-                        className="flex items-center gap-3 px-2 py-1 rounded-md hover:bg-gray-50"
-                      >
-                        <span className="inline-flex w-9 h-9 items-center justify-center rounded-full ring-1 ring-gray-200 bg-white overflow-hidden">
-                          {b.image ? (
-                            <Image src={b.image} alt={b.name} width={28} height={28} sizes="28px" loading="lazy" className="object-contain" />
-                          ) : (
-                            <span className="w-6 h-6 bg-gray-200 rounded" />
-                          )}
-                        </span>
-                        <span className="text-gray-700 capitalize">{b.name}</span>
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-                {user && mobileAccountOpen && (
-                  <div className="mt-3 grid grid-cols-1 gap-2">
-                    <Link href={`/${locale}/account`} onClick={() => setIsQuickOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50">
-                      <span className="text-gray-800">{t('header.profile')}</span>
-                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-                    </Link>
-                    <Link href={`/${locale}/orders`} onClick={() => setIsQuickOpen(false)} className="flex items-center justify-between px-4 py-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50">
-                      <span className="text-gray-800">{t('account.myOrders')}</span>
-                      <svg className="w-4 h-4 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-                    </Link>
-                    <button
-                      className="flex items-center justify-between w-full px-4 py-3 rounded-lg border border-red-100 bg-white hover:bg-red-50"
-                      onClick={async () => {
-                        try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
-                        try {
-                          sessionStorage.removeItem('last_login_password');
-                          window.dispatchEvent(new Event('auth_changed'));
-                        } catch {}
-                        setIsQuickOpen(false);
-                        router.replace(`/${locale}`);
-                      }}
-                    >
-                      <span className="text-red-600">{t('header.logout')}</span>
-                      <svg className="w-4 h-4 text-red-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"/></svg>
-                    </button>
-                  </div>
-                )}
-              </div>
+              {/* Brands dropdown removed */}
 
               {/* Categories hover dropdown trigger (also toggles on mobile) */}
               <div className="relative group">
@@ -264,10 +221,15 @@ export default function Header() {
                     {orderedCategories.map((cat) => (
                       <Link
                         key={cat.slug}
-                        href={`/${locale}/search?categories[0]=${cat.id}`}
+                        href={`/${locale}/search?categories[0]=${cat._id}`}
                         className="text-gray-700 hover:text-blue-700 py-1"
                       >
-                        {locale === 'ar' ? cat.name.ar : cat.name.en}
+                        {(() => {
+                          const ar = cat.nameObj?.ar;
+                          const en = cat.nameObj?.en;
+                          const fallback = cat.name || cat.slug;
+                          return locale === 'ar' ? (ar || fallback) : (en || fallback);
+                        })()}
                       </Link>
                     ))}
                   </div>
@@ -327,7 +289,7 @@ export default function Header() {
                         className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                         onClick={async () => {
                           try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
-                          window.dispatchEvent(new Event('auth_changed'));
+                          try { window.dispatchEvent(new Event('auth_changed')); } catch {}
                           setIsUserMenuOpen(false);
                           router.replace(`/${locale}`);
                         }}
@@ -408,10 +370,7 @@ export default function Header() {
                       className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
                       onClick={async () => {
                         try { await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
-                        try {
-                          sessionStorage.removeItem('last_login_password');
-                          window.dispatchEvent(new Event('auth_changed'));
-                        } catch {}
+                        try { window.dispatchEvent(new Event('auth_changed')); } catch {}
                         setIsUserMenuOpen(false);
                         router.replace(`/${locale}`);
                       }}
@@ -429,7 +388,7 @@ export default function Header() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 8h12l-1 11a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L6 8z" />
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 8V7a3 3 0 0 1 6 0v1" />
                 </svg>
-                {cartCount > 0 && (
+                {user && cartCount > 0 && (
                   <span className={`absolute -top-1 ${locale === 'ar' ? '-left-1' : '-right-1'} min-w-[18px] h-[18px] px-1 rounded-full bg-rose-600 text-white text-[11px] leading-[18px] text-center shadow`}
                     aria-label={`Cart items: ${cartCount}`}
                   >
@@ -503,7 +462,7 @@ export default function Header() {
                 <Link href={`/${locale}`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.home')}</Link>
                 <Link href={`/${locale}/sections/bestseller`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.bestSellers')}</Link>
                 <Link href={`/${locale}/contact`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.contact')}</Link>
-                <Link href={`/${locale}/brands`} onClick={() => setIsMenuOpen(false)} className="block px-3 py-2 rounded-lg hover:bg-gray-50 text-gray-800">{t('nav.brands')}</Link>
+                {/* Brands link removed */}
                 <Link href={switchHref} onClick={() => setIsMenuOpen(false)} className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 mt-2">
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 3C7.03 3 3 7.03 3 12s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 0c2.5 2.5 2.5 15.5 0 18m0-18c-2.5 2.5-2.5 15.5 0 18M3 12h18"/></svg>
                   {otherLocale === 'ar' ? 'AR' : 'EN'}
@@ -515,8 +474,13 @@ export default function Header() {
                 <div className="text-xs font-semibold text-gray-500 px-1 mb-2">{t('nav.shopByCategory')}</div>
                 <div className="grid grid-cols-2 gap-3">
                   {orderedCategories.map((cat) => (
-                    <Link key={cat.slug} href={`/${locale}/search?categories[0]=${cat.id}`} onClick={() => setIsMenuOpen(false)} className="text-gray-700 hover:text-blue-700 py-1">
-                      {locale === 'ar' ? cat.name.ar : cat.name.en}
+                    <Link key={cat.slug} href={`/${locale}/search?categories[0]=${cat._id}`} onClick={() => setIsMenuOpen(false)} className="text-gray-700 hover:text-blue-700 py-1">
+                      {(() => {
+                        const ar = cat.nameObj?.ar;
+                        const en = cat.nameObj?.en;
+                        const fallback = cat.name || cat.slug;
+                        return locale === 'ar' ? (ar || fallback) : (en || fallback);
+                      })()}
                     </Link>
                   ))}
                 </div>
@@ -632,8 +596,13 @@ export default function Header() {
                 {catsOpen && (
                   <div className="grid grid-cols-2 gap-3 px-2">
                     {orderedCategories.map((cat) => (
-                      <Link key={cat.slug} href={`/${locale}/search?categories[0]=${cat.id}`} onClick={() => setIsQuickOpen(false)} className="text-gray-700 hover:text-blue-700 py-1 text-sm">
-                        {locale === 'ar' ? cat.name.ar : cat.name.en}
+                      <Link key={cat.slug} href={`/${locale}/search?categories[0]=${cat._id}`} onClick={() => setIsQuickOpen(false)} className="text-gray-700 hover:text-blue-700 py-1 text-sm">
+                        {(() => {
+                          const ar = cat.nameObj?.ar;
+                          const en = cat.nameObj?.en;
+                          const fallback = cat.name || cat.slug;
+                          return locale === 'ar' ? (ar || fallback) : (en || fallback);
+                        })()}
                       </Link>
                     ))}
                   </div>

@@ -3,42 +3,79 @@
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { Trash2, Plus, Minus } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useLocale } from 'next-intl';
 import { useStore } from '@/context/StoreContext';
-import { products as productsData } from '@/data/products';
 
 export default function CartPage() {
   const store = useStore();
   const locale = useLocale();
 
   const isUrl = (s?: string) => !!s && /^(https?:)?\//.test(s);
+  type LineItem = {
+    id: string;
+    slug: string;
+    name: string;
+    price: number;
+    originalPrice?: number;
+    image?: string;
+    quantity: number;
+    brand?: string;
+  };
 
-  const lineItems = useMemo(() => {
-    return store.cart.map((ci) => {
-      const product = productsData.find((p) => p.id === ci.productId);
-      if (!product) return null;
-      const name = locale === 'ar' ? product.name.ar : product.name.en;
-      const image = product.images?.[0];
-      return {
-        id: String(product.id),
-        slug: product.slug,
-        name,
-        price: product.price,
-        originalPrice: product.originalPrice,
-        image,
-        quantity: ci.qty,
-        brand: product.brandSlug
-      };
-    }).filter(Boolean) as Array<{
-      id: string; slug: string; name: string; price: number; originalPrice?: number; image?: string; quantity: number; brand: string;
-    }>;
-  }, [store.cart, locale]);
+  const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // Fetch product details for productIds in cart from API (DB), then compose line items
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const ids = store.cart.map((c) => String(c.productId)).filter(Boolean);
+      if (ids.length === 0) { setLineItems([]); return; }
+      setLoading(true);
+      try {
+        const resp = await fetch('/api/products/by-ids', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        if (cancelled) return;
+        if (!resp.ok) { setLineItems([]); setLoading(false); return; }
+        const json = await resp.json();
+        const products = Array.isArray(json?.products) ? json.products : [];
+        const items: LineItem[] = products.map((p: any) => {
+          const hasSale = typeof p?.salePrice === 'number' && p.salePrice >= 0 && p.salePrice < p.price;
+          const price = hasSale ? p.salePrice : p.price;
+          const originalPrice = hasSale ? p.price : undefined;
+          const firstImage = Array.isArray(p?.images) && p.images.length ? p.images[0]?.url : undefined;
+          const name = p?.name || '';
+          const pid = String(p?._id || p?.slug || '');
+          const qty = store.cart.find((c) => String(c.productId) === pid)?.qty ?? 1;
+          return {
+            id: pid,
+            slug: p?.slug || pid,
+            name,
+            price,
+            originalPrice,
+            image: firstImage,
+            quantity: qty,
+            brand: p?.brandId || undefined,
+          };
+        });
+        setLineItems(items);
+      } catch {
+        if (!cancelled) setLineItems([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [store.cart]);
 
   const updateQuantity = (id: string, change: number) => {
-    const pid = Number(id);
-    const current = store.cart.find((c) => c.productId === pid)?.qty ?? 0;
+    const pid = String(id);
+    const current = store.cart.find((c) => String(c.productId) === pid)?.qty ?? 0;
     const next = Math.max(1, current + change);
     // Implement as remove when drop to 0 or set by diff
     if (next === current) return;
@@ -53,7 +90,7 @@ export default function CartPage() {
   };
 
   const removeItem = (id: string) => {
-    store.removeFromCart(Number(id));
+    store.removeFromCart(String(id));
   };
 
   const nf = useMemo(() => new Intl.NumberFormat(locale === 'ar' ? 'ar-EG' : 'en-US', { maximumFractionDigits: 2 }), [locale]);
@@ -75,7 +112,9 @@ export default function CartPage() {
           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-800">{locale === 'ar' ? 'سلة التسوق' : 'Cart'}</h1>
         </div>
 
-        {lineItems.length === 0 ? (
+        {loading ? (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center text-gray-600">{locale === 'ar' ? 'جاري التحميل...' : 'Loading...'}</div>
+        ) : lineItems.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm p-8 text-center">
             <p className="text-gray-600 mb-4">{locale === 'ar' ? 'سلة التسوق فارغة.' : 'Your cart is empty.'}</p>
             <Link href={`/${locale}`} className="text-blue-700 font-semibold hover:underline">{locale === 'ar' ? 'العودة للتسوق' : 'Continue Shopping'}</Link>

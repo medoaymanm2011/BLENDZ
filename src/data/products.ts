@@ -88,7 +88,7 @@ export const products: Product[] = [
   {
     id: 1,
     slug: 'casual-outfit-set',
-    name: { ar: 'طقم كاجوال أطفال', en: 'Casual Outfit Set' },
+    name: { ar: 'طقم كاجوال', en: 'Casual Outfit Set' },
     brandSlug: 'nike',
     categorySlugs: ['casual'],
     price: 399,
@@ -100,7 +100,7 @@ export const products: Product[] = [
   {
     id: 2,
     slug: 'sport-shoes-kids',
-    name: { ar: 'حذاء رياضي أطفال', en: 'Kids Sport Shoes' },
+    name: { ar: 'حذاء رياضي', en: 'Sport Shoes' },
     brandSlug: 'adidas',
     categorySlugs: ['shoes'],
     price: 550,
@@ -145,7 +145,7 @@ export const products: Product[] = [
   {
     id: 6,
     slug: 'casual-hoodie-kids',
-    name: { ar: 'هودي كاجوال للأطفال', en: 'Kids Casual Hoodie' },
+    name: { ar: 'هودي كاجوال', en: 'Casual Hoodie' },
     brandSlug: 'zara',
     categorySlugs: ['casual'],
     price: 420,
@@ -188,7 +188,7 @@ export const products: Product[] = [
   {
     id: 10,
     slug: 'kids-casual-tshirt',
-    name: { ar: 'تيشيرت كاجوال أطفال', en: 'Kids Casual T-Shirt' },
+    name: { ar: 'تيشيرت كاجوال', en: 'Casual T-Shirt' },
     brandSlug: 'nike',
     categorySlugs: ['casual'],
     price: 190,
@@ -209,7 +209,7 @@ export const products: Product[] = [
   {
     id: 12,
     slug: 'kids-sandals',
-    name: { ar: 'صنادل أطفال', en: 'Kids Sandals' },
+    name: { ar: 'صنادل', en: 'Sandals' },
     brandSlug: 'skechers',
     categorySlugs: ['shoes'],
     price: 330,

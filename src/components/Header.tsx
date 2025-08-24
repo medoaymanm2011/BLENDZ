@@ -68,10 +68,10 @@ export default function Header() {
     'shfatat-althd',
     'alaanay-baltfl',
     'adoat-alakl-oalshrb',
-    'baby-stroller',
-    'baby-Cosmetics',
-    'booty training',
-    'Baby Toys ',
+    'stroller',
+    'cosmetics',
+    'training',
+    'toys',
     'شنط وشيالات',
   ];
   const orderedCategories = [...dropdownCategories].sort((a, b) => {

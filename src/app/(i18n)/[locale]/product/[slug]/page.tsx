@@ -406,8 +406,8 @@ export default function ProductPage() {
                 <h2 className="font-semibold text-gray-900 mb-1">{locale === 'ar' ? 'الوصف' : 'Description'}</h2>
                 <p className="text-gray-700 leading-7">
                   {locale === 'ar'
-                    ? 'منتج عالي الجودة بلمسة مميزة. خامات مريحة ومتينة تناسب الاستخدام اليومي للأطفال. الصور المعروضة لغرض التوضيح وقد تختلف درجات الألوان قليلًا. تجربة شراء ممتعة مع خدمة ما بعد البيع.'
-                    : 'High-quality product with a distinctive touch. Comfortable and durable materials suitable for daily use for kids. Images are for illustration and colors may slightly vary. Enjoy a smooth shopping experience with after-sales support.'}
+                    ? 'منتج عالي الجودة بلمسة مميزة. خامات مريحة ومتينة تناسب الاستخدام اليومي. الصور المعروضة لغرض التوضيح وقد تختلف درجات الألوان قليلًا. تجربة شراء ممتعة مع خدمة ما بعد البيع.'
+                    : 'High-quality product with a distinctive touch. Comfortable and durable materials suitable for daily use. Images are for illustration and colors may slightly vary. Enjoy a smooth shopping experience with after-sales support.'}
                 </p>
               </div>
             </div>

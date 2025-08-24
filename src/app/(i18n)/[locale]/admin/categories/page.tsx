@@ -138,7 +138,21 @@ export default function AdminCategoriesPage() {
   return (
     <div className="text-gray-900" dir={isAR ? 'rtl' : 'ltr'}>
       <div className={`px-1 py-2 space-y-8 ${isAR ? 'text-right' : ''}`}>
-        <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • التصنيفات' : 'Admin • Categories'}</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">
+          {isAR ? (
+            <>
+              <span>لوحة التحكم</span>
+              <span className="hidden sm:inline"> • </span>
+              <span className="sm:ms-1">التصنيفات</span>
+            </>
+          ) : (
+            <>
+              <span>Admin</span>
+              <span className="hidden sm:inline"> • </span>
+              <span className="sm:ms-1">Categories</span>
+            </>
+          )}
+        </h1>
 
         <form onSubmit={onCreate} className="grid md:grid-cols-5 gap-4 bg-white p-4 rounded-xl shadow">
           <input
@@ -158,7 +172,7 @@ export default function AdminCategoriesPage() {
             className="input input-bordered w-full p-2 rounded border border-gray-300"
           />
           <div className="md:col-span-2">
-            <div className="flex items-start gap-3">
+            <div className="flex flex-col sm:flex-row items-start gap-3">
               <div className="flex-1">
                 <input
                   value={form.image}
@@ -185,9 +199,9 @@ export default function AdminCategoriesPage() {
               </div>
             </div>
           </div>
-          <div className="md:col-span-5 text-xs text-gray-500">{isAR ? 'مسار المعاينة:' : 'Path preview:'} <span className="font-mono">/category/{form.slug || '...'}</span></div>
+          <div className="md:col-span-5 text-xs text-gray-500">{isAR ? 'مسار المعاينة:' : 'Path preview:'} <span className="font-mono break-all">/category/{form.slug || '...'}</span></div>
           <input type="number" value={form.sortOrder ?? 0} onChange={(e)=>setForm({ ...form, sortOrder: Number(e.target.value) })} placeholder={isAR ? 'الترتيب' : 'Sort'} className="input input-bordered w-full p-2 rounded border border-gray-300" />
-          <div className="md:col-span-5 flex items-center gap-3">
+          <div className="md:col-span-5 flex flex-wrap items-center gap-2">
             <button disabled={loading} className="btn bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">
               {loading ? (isAR ? 'جارٍ الحفظ...' : 'Saving...') : (editingId ? (isAR ? 'تحديث التصنيف' : 'Update Category') : (isAR ? 'إضافة تصنيف' : 'Add Category'))}
             </button>
@@ -199,17 +213,17 @@ export default function AdminCategoriesPage() {
 
         <div className="grid gap-3">
           {categories.map((c) => (
-            <div key={c._id} className="bg-white rounded-xl p-4 shadow flex items-center justify-between">
+            <div key={c._id} className="bg-white rounded-xl p-3 sm:p-4 shadow border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="flex items-center gap-3">
-                {c.image ? (<img src={c.image} alt={c.name} className="w-12 h-12 object-cover rounded" />) : (<div className="w-12 h-12 bg-gray-200 rounded" />)}
+                {c.image ? (<img src={c.image} alt={c.name} className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded" />) : (<div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 rounded" />)}
                 <div>
-                  <div className="font-semibold">{c.name}</div>
-                  <div className="text-xs text-gray-500">/{c.slug}</div>
+                  <div className="font-semibold text-sm sm:text-base truncate max-w-[220px] sm:max-w-none">{c.name}</div>
+                  <div className="text-xs text-gray-500 break-all">/{c.slug}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <button onClick={()=>onStartEdit(c)} className="text-blue-700 hover:underline">{isAR ? 'تعديل' : 'Edit'}</button>
-                <button onClick={()=>onDelete(c._id)} className="text-red-600 hover:underline">{isAR ? 'حذف' : 'Delete'}</button>
+              <div className="flex items-center justify-between sm:justify-end gap-2 text-xs sm:text-sm w-full sm:w-auto border-t pt-2 sm:border-0 sm:pt-0">
+                <button onClick={()=>onStartEdit(c)} className="px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 hover:bg-blue-50">{isAR ? 'تعديل' : 'Edit'}</button>
+                <button onClick={()=>onDelete(c._id)} className="px-3 py-1.5 rounded-full border border-rose-200 text-rose-700 hover:bg-rose-50">{isAR ? 'حذف' : 'Delete'}</button>
               </div>
             </div>
           ))}

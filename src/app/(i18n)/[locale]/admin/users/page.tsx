@@ -98,55 +98,107 @@ export default function AdminUsersPage() {
 
   return (
     <div className="space-y-4" dir={isAR ? 'rtl' : 'ltr'}>
-      <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • المستخدمون' : 'Admin • Users'}</h1>
+      <h1 className="text-xl sm:text-2xl font-bold">
+        {isAR ? (
+          <>
+            <span>لوحة التحكم</span>
+            <span className="hidden sm:inline"> • </span>
+            <span className="sm:ms-1">المستخدمون</span>
+          </>
+        ) : (
+          <>
+            <span>Admin</span>
+            <span className="hidden sm:inline"> • </span>
+            <span className="sm:ms-1">Users</span>
+          </>
+        )}
+      </h1>
       {loading ? (
         <div className="text-gray-500">{isAR ? 'جارٍ التحميل…' : 'Loading…'}</div>
       ) : (
-        <div className="overflow-auto rounded-xl border bg-white">
-          <table className={`min-w-full text-sm ${isAR ? 'text-right' : 'text-left'}`}>
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-3 py-2">{isAR ? 'الاسم' : 'Name'}</th>
-                <th className="px-3 py-2">{isAR ? 'البريد الإلكتروني' : 'Email'}</th>
-                <th className="px-3 py-2">{isAR ? 'مُوثَّق' : 'Verified'}</th>
-                <th className="px-3 py-2">{isAR ? 'الدور' : 'Role'}</th>
-                <th className="px-3 py-2">{isAR ? 'الحالة' : 'Active'}</th>
-                <th className="px-3 py-2">{isAR ? 'الإجراءات' : 'Actions'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u._id} className="border-t">
-                  <td className="px-3 py-2 whitespace-nowrap">{u.name}</td>
-                  <td className="px-3 py-2">{u.email}</td>
-                  <td className="px-3 py-2">{u.verified ? (isAR ? 'نعم' : 'Yes') : (isAR ? 'لا' : 'No')}</td>
-                  <td className="px-3 py-2">
-                    <span className={`px-2 py-1 rounded text-xs ${u.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>{isAR ? (u.role === 'admin' ? 'مشرف' : 'مستخدم') : u.role}</span>
-                  </td>
-                  <td className="px-3 py-2">{u.active ? (isAR ? 'نشط' : 'Active') : (isAR ? 'معطل' : 'Disabled')}</td>
-                  <td className="px-3 py-2 space-x-2">
-                    {u.role === 'admin' ? (
-                      <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { role: 'user' })} className="text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">{isAR ? 'إنزال' : 'Demote'}</button>
-                    ) : (
-                      <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { role: 'admin' })} className="text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">{isAR ? 'ترقية' : 'Promote'}</button>
-                    )}
-                    {u.active ? (
-                      <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { active: false })} className="text-sm px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-700">{isAR ? 'تعطيل' : 'Disable'}</button>
-                    ) : (
-                      <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { active: true })} className="text-sm px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-700">{isAR ? 'تفعيل' : 'Activate'}</button>
-                    )}
-                    <button disabled={busyId === u._id} onClick={() => deleteUser(u._id)} className="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700">{isAR ? 'حذف' : 'Delete'}</button>
-                  </td>
-                </tr>
-              ))}
-              {users.length === 0 && (
+        <>
+          {/* Mobile cards */}
+          <div className="sm:hidden grid gap-3">
+            {users.map((u) => (
+              <div key={u._id} className="bg-white rounded-xl p-3 shadow border border-gray-100">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-sm truncate">{u.name}</div>
+                    <div className="text-xs text-gray-500 break-all">{u.email}</div>
+                  </div>
+                  <div className="flex flex-col items-end gap-1 text-[11px]">
+                    <span className={`px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>{isAR ? (u.role === 'admin' ? 'مشرف' : 'مستخدم') : u.role}</span>
+                    <span className={`px-2 py-0.5 rounded-full ${u.active ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>{u.active ? (isAR ? 'نشط' : 'Active') : (isAR ? 'معطل' : 'Disabled')}</span>
+                    <span className={`px-2 py-0.5 rounded-full ${u.verified ? 'bg-emerald-50 text-emerald-700' : 'bg-yellow-50 text-yellow-700'}`}>{u.verified ? (isAR ? 'موثّق' : 'Verified') : (isAR ? 'غير موثّق' : 'Unverified')}</span>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap justify-end gap-2 text-xs">
+                  {u.role === 'admin' ? (
+                    <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { role: 'user' })} className="px-3 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50">{isAR ? 'إنزال' : 'Demote'}</button>
+                  ) : (
+                    <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { role: 'admin' })} className="px-3 py-1.5 rounded-full border border-gray-200 hover:bg-gray-50">{isAR ? 'ترقية' : 'Promote'}</button>
+                  )}
+                  {u.active ? (
+                    <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { active: false })} className="px-3 py-1.5 rounded-full border border-rose-200 text-rose-700 hover:bg-rose-50">{isAR ? 'تعطيل' : 'Disable'}</button>
+                  ) : (
+                    <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { active: true })} className="px-3 py-1.5 rounded-full border border-green-200 text-green-700 hover:bg-green-50">{isAR ? 'تفعيل' : 'Activate'}</button>
+                  )}
+                  <button disabled={busyId === u._id} onClick={() => deleteUser(u._id)} className="px-3 py-1.5 rounded-full bg-red-600 text-white hover:bg-red-700">{isAR ? 'حذف' : 'Delete'}</button>
+                </div>
+              </div>
+            ))}
+            {users.length === 0 && (
+              <div className="text-center text-gray-500 py-6 bg-white rounded-xl border">{isAR ? 'لا يوجد مستخدمون' : 'No users'}</div>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden sm:block overflow-auto rounded-xl border bg-white">
+            <table className={`min-w-full text-sm ${isAR ? 'text-right' : 'text-left'}`}>
+              <thead className="bg-gray-50">
                 <tr>
-                  <td className="px-3 py-6 text-center text-gray-500" colSpan={6}>{isAR ? 'لا يوجد مستخدمون' : 'No users'}</td>
+                  <th className="px-3 py-2">{isAR ? 'الاسم' : 'Name'}</th>
+                  <th className="px-3 py-2">{isAR ? 'البريد الإلكتروني' : 'Email'}</th>
+                  <th className="px-3 py-2">{isAR ? 'مُوثَّق' : 'Verified'}</th>
+                  <th className="px-3 py-2">{isAR ? 'الدور' : 'Role'}</th>
+                  <th className="px-3 py-2">{isAR ? 'الحالة' : 'Active'}</th>
+                  <th className="px-3 py-2">{isAR ? 'الإجراءات' : 'Actions'}</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u._id} className="border-t">
+                    <td className="px-3 py-2 whitespace-nowrap">{u.name}</td>
+                    <td className="px-3 py-2">{u.email}</td>
+                    <td className="px-3 py-2">{u.verified ? (isAR ? 'نعم' : 'Yes') : (isAR ? 'لا' : 'No')}</td>
+                    <td className="px-3 py-2">
+                      <span className={`px-2 py-1 rounded text-xs ${u.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'}`}>{isAR ? (u.role === 'admin' ? 'مشرف' : 'مستخدم') : u.role}</span>
+                    </td>
+                    <td className="px-3 py-2">{u.active ? (isAR ? 'نشط' : 'Active') : (isAR ? 'معطل' : 'Disabled')}</td>
+                    <td className="px-3 py-2 space-x-2">
+                      {u.role === 'admin' ? (
+                        <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { role: 'user' })} className="text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">{isAR ? 'إنزال' : 'Demote'}</button>
+                      ) : (
+                        <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { role: 'admin' })} className="text-sm px-3 py-1 rounded bg-gray-100 hover:bg-gray-200">{isAR ? 'ترقية' : 'Promote'}</button>
+                      )}
+                      {u.active ? (
+                        <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { active: false })} className="text-sm px-3 py-1 rounded bg-red-100 hover:bg-red-200 text-red-700">{isAR ? 'تعطيل' : 'Disable'}</button>
+                      ) : (
+                        <button disabled={busyId === u._id} onClick={() => patchUser(u._id, { active: true })} className="text-sm px-3 py-1 rounded bg-green-100 hover:bg-green-200 text-green-700">{isAR ? 'تفعيل' : 'Activate'}</button>
+                      )}
+                      <button disabled={busyId === u._id} onClick={() => deleteUser(u._id)} className="text-sm px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700">{isAR ? 'حذف' : 'Delete'}</button>
+                    </td>
+                  </tr>
+                ))}
+                {users.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-6 text-center text-gray-500" colSpan={6}>{isAR ? 'لا يوجد مستخدمون' : 'No users'}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

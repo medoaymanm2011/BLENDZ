@@ -63,10 +63,24 @@ export default function AdminOrdersPage() {
 
   return (
     <div className="space-y-4" dir={isAR ? 'rtl' : 'ltr'}>
-      <div className={`flex items-center justify-between ${isAR ? 'text-right' : ''}`}>
-        <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • الطلبات' : 'Admin • Orders'}</h1>
+      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${isAR ? 'text-right' : ''}`}>
+        <h1 className="text-xl sm:text-2xl font-bold">
+          {isAR ? (
+            <>
+              <span>لوحة التحكم</span>
+              <span className="hidden sm:inline"> • </span>
+              <span className="sm:ms-1">الطلبات</span>
+            </>
+          ) : (
+            <>
+              <span>Admin</span>
+              <span className="hidden sm:inline"> • </span>
+              <span className="sm:ms-1">Orders</span>
+            </>
+          )}
+        </h1>
         <div className="flex items-center gap-2 text-sm">
-          <label className="text-gray-600">{isAR ? 'الحالة' : 'Status'}</label>
+          <label className="text-gray-600 whitespace-nowrap">{isAR ? 'الحالة' : 'Status'}</label>
           <select value={status} onChange={(e)=>setStatus(e.target.value)} className="border border-gray-300 rounded px-2 py-1">
             <option value="">{isAR ? 'الكل' : 'All'}</option>
             <option value="processing">{isAR ? 'قيد المعالجة' : 'Processing'}</option>
@@ -82,15 +96,23 @@ export default function AdminOrdersPage() {
         {loading && <div className="text-gray-600">{isAR ? 'جارٍ التحميل...' : 'Loading...'}</div>}
         {!loading && orders.length === 0 && <div className="text-gray-600">{isAR ? 'لا توجد طلبات' : 'No orders'}</div>}
         {orders.map((o) => (
-          <div key={o._id} className="bg-white border rounded-xl p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
+          <div
+            key={o._id}
+            className="bg-white border rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+          >
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
               <div className="font-semibold">#{o._id.slice(-6)}</div>
-              <div className="text-sm text-gray-700">{new Date(o.createdAt || '').toLocaleString()}</div>
-              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800">{o.status}</span>
+              <div className="text-xs sm:text-sm text-gray-700 break-words">{new Date(o.createdAt || '').toLocaleString()}</div>
+              <span className="text-[11px] sm:text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-800">{o.status}</span>
             </div>
-            <div className="flex items-center gap-4 text-sm">
-              <div className="text-gray-800">{o.totals?.total ?? 0} {o.totals?.currency ?? 'EGP'}</div>
-              <button onClick={()=>router.push(`/${locale}/admin/orders/${o._id}`)} className="px-3 py-1.5 rounded border hover:bg-gray-50">{isAR ? 'فتح' : 'Open'}</button>
+            <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 text-sm w-full sm:w-auto">
+              <div className="text-gray-800 whitespace-nowrap">{o.totals?.total ?? 0} {o.totals?.currency ?? 'EGP'}</div>
+              <button
+                onClick={()=>router.push(`/${locale}/admin/orders/${o._id}`)}
+                className="px-2 py-1 sm:px-3 sm:py-1.5 rounded border hover:bg-gray-50 text-xs sm:text-sm"
+              >
+                {isAR ? 'فتح' : 'Open'}
+              </button>
             </div>
           </div>
         ))}

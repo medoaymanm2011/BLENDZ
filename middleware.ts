@@ -35,18 +35,62 @@ export function middleware(req: NextRequest) {
     url.pathname = `/${nextIntlConfig.defaultLocale}`;
     return NextResponse.redirect(url);
   }
-  // Match only locale home pages
-  const homeMatch = pathname.match(/^\/(ar|en)\/?$/);
-  if (!homeMatch) return NextResponse.next();
+  // Protect admin area: /(ar|en)/admin/** requires admin role
+  const adminMatch = pathname.match(/^\/(ar|en)\/admin(\/.*)?$/);
+  if (adminMatch) {
+    const locale = adminMatch[1] as 'ar' | 'en';
+    const token = req.cookies.get('auth_token')?.value;
+    const payload = token ? decodeJwtPayload<{ role?: string }>(token) : null;
+    if (!payload || payload.role !== 'admin') {
+      const url = req.nextUrl.clone();
+      url.pathname = `/${locale}/account`;
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
 
-  const locale = homeMatch[1] as 'ar' | 'en';
-  const token = req.cookies.get('auth_token')?.value;
-  if (!token) return NextResponse.next();
-  const payload = decodeJwtPayload<{ role?: string }>(token);
-  if (payload?.role === 'admin') {
-    const url = req.nextUrl.clone();
-    url.pathname = `/${locale}/admin`;
-    return NextResponse.redirect(url);
+  // Protect signed-in user areas with exceptions
+  // - orders: always require auth
+  // - account: allow public pages (/account, /account/login, /account/register, /account/verify), protect other subpaths
+  const protectedMatch = pathname.match(/^\/(ar|en)\/(orders|account)(\/.*)?$/);
+  if (protectedMatch) {
+    const locale = protectedMatch[1] as 'ar' | 'en';
+    const section = protectedMatch[2] as 'orders' | 'account';
+    const subpath = protectedMatch[3] || '';
+
+    // Public account routes (no auth required)
+    if (section === 'account') {
+      const sp = subpath || '';
+      const isRoot = sp === '' || sp === '/';
+      const isPublic = isRoot || sp.startsWith('/login') || sp.startsWith('/register') || sp.startsWith('/verify');
+      if (isPublic) {
+        return NextResponse.next();
+      }
+    }
+
+    // For orders and private account subpaths, require token
+    const token = req.cookies.get('auth_token')?.value;
+    if (!token) {
+      const url = req.nextUrl.clone();
+      url.pathname = `/${locale}/account`;
+      url.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(url);
+    }
+    return NextResponse.next();
+  }
+
+  // Locale home pages: redirect admins to admin dashboard
+  const homeMatch = pathname.match(/^\/(ar|en)\/?$/);
+  if (homeMatch) {
+    const locale = homeMatch[1] as 'ar' | 'en';
+    const token = req.cookies.get('auth_token')?.value;
+    if (!token) return NextResponse.next();
+    const payload = decodeJwtPayload<{ role?: string }>(token);
+    if (payload?.role === 'admin') {
+      const url = req.nextUrl.clone();
+      url.pathname = `/${locale}/admin`;
+      return NextResponse.redirect(url);
+    }
   }
   return NextResponse.next();
 }
@@ -58,5 +102,10 @@ export const config = {
     '/en',
     '/ar/',
     '/en/',
+    // Admin area
+    '/(ar|en)/admin/:path*',
+    // Signed-in user areas
+    '/(ar|en)/orders/:path*',
+    '/(ar|en)/account/:path*',
   ],
 };

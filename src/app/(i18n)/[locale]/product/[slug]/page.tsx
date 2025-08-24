@@ -179,8 +179,20 @@ export default function ProductPage() {
 
   // At this point, if we reach here we either have a product view or already handled not-found/loading.
   if (!view) {
-    // This is a safety guard to satisfy TypeScript; in practice previous branches cover this.
-    return null;
+    // Safety fallback: if for any reason the view isn't ready, render a friendly not-found UI
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Header />
+        <div className="container mx-auto px-4 py-12">
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <h1 className="text-2xl font-bold mb-2">{locale === 'ar' ? 'المنتج غير موجود' : 'Product not found'}</h1>
+            <p className="text-gray-600 mb-6">{locale === 'ar' ? 'تعذر العثور على هذا المنتج.' : 'We could not find this product.'}</p>
+            <Link href={`/${locale}`} className="text-purple-600 hover:underline">{locale === 'ar' ? 'العودة للصفحة الرئيسية' : 'Back to Home'}</Link>
+          </div>
+        </div>
+        <Footer />
+      </div>
+    );
   }
 
   const title = view.title;

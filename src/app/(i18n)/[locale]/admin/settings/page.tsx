@@ -32,6 +32,10 @@ export default function AdminSettingsPage() {
   const locale = useMemo(() => pathname?.split('/').filter(Boolean)[0] || 'en', [pathname]);
   const isAR = locale === 'ar';
   const ADMIN_TOKEN = process.env.NEXT_PUBLIC_ADMIN_TOKEN as string | undefined;
+  // Payment instruction sources used by Checkout
+  const INSTAPAY_HANDLE = (process.env.NEXT_PUBLIC_INSTAPAY_HANDLE as string) || '';
+  const BANK_ACCOUNT = (process.env.NEXT_PUBLIC_BANK_ACCOUNT as string) || '';
+  const WHATSAPP = (process.env.NEXT_PUBLIC_WHATSAPP as string) || '';
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +117,21 @@ export default function AdminSettingsPage() {
 
   return (
     <div className="space-y-4" dir={isAR ? 'rtl' : 'ltr'}>
-      <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • الإعدادات' : 'Admin • Settings'}</h1>
+      <h1 className="text-xl sm:text-2xl font-bold">
+        {isAR ? (
+          <>
+            <span>لوحة التحكم</span>
+            <span className="hidden sm:inline"> • </span>
+            <span className="sm:ms-1">الإعدادات</span>
+          </>
+        ) : (
+          <>
+            <span>Admin</span>
+            <span className="hidden sm:inline"> • </span>
+            <span className="sm:ms-1">Settings</span>
+          </>
+        )}
+      </h1>
       {loading ? (
         <div className="text-gray-500">{isAR ? 'جارٍ التحميل…' : 'Loading…'}</div>
       ) : (
@@ -181,19 +199,36 @@ export default function AdminSettingsPage() {
                 checked={!!settings.payments?.stripeEnabled}
                 onChange={(e) => setSettings((s) => ({ ...s, payments: { ...(s.payments || {}), stripeEnabled: e.target.checked } }))}
               />
-              {isAR ? 'تفعيل سترايب' : 'Stripe Enabled'}
+              {isAR ? 'تحويل بنكي / إنستا باي' : 'Bank Transfer / Instapay'}
             </label>
+          </div>
+
+          {/* Info: Checkout payment instructions */}
+          <div className="text-xs bg-blue-50 text-blue-900 rounded-lg p-3 border border-blue-200 space-y-1">
+            <div className="font-semibold">{isAR ? 'ملاحظة الدفع في صفحة Checkout' : 'Checkout payment note'}</div>
+            <p>{isAR ? 'عند تفعيل التحويل البنكي/إنستا باي، تعتمد صفحة الدفع على القيم التالية من الإعدادات البيئية:' : 'When Bank Transfer/Instapay is enabled, the checkout page uses these environment values:'}</p>
+            <ul className="ms-4 list-disc">
+              <li><span className="font-mono">NEXT_PUBLIC_INSTAPAY_HANDLE</span>: <span className="font-semibold">{INSTAPAY_HANDLE || (isAR ? 'غير مضبوط' : 'not set')}</span></li>
+              <li><span className="font-mono">NEXT_PUBLIC_BANK_ACCOUNT</span>: <span className="font-semibold">{BANK_ACCOUNT || (isAR ? 'غير مضبوط' : 'not set')}</span></li>
+              <li><span className="font-mono">NEXT_PUBLIC_WHATSAPP</span>: <span className="font-semibold">{WHATSAPP || (isAR ? 'غير مضبوط' : 'not set')}</span></li>
+            </ul>
+            <p className="text-[11px] text-blue-800/80">
+              {isAR
+                ? 'لتعديلها، حدّث متغيرات البيئة ثم أعد تشغيل الخادم.'
+                : 'To change them, update environment variables and restart the server.'
+              }
+            </p>
           </div>
 
           {/* Shipping methods */}
           <div>
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
               <div className="text-sm text-gray-600">{isAR ? 'طرق الشحن' : 'Shipping Methods'}</div>
-              <button type="button" onClick={addShip} className="px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">{isAR ? 'إضافة' : 'Add'}</button>
+              <button type="button" onClick={addShip} className="self-start sm:self-auto px-3 py-1 rounded bg-gray-100 hover:bg-gray-200 text-sm">{isAR ? 'إضافة' : 'Add'}</button>
             </div>
             <div className="grid gap-2">
               {(settings.shippingMethods || []).map((m, idx) => (
-                <div key={m.code || idx} className="grid md:grid-cols-5 gap-2 items-center">
+                <div key={m.code || idx} className="grid md:grid-cols-5 gap-2 items-center p-2 rounded-lg border md:border-0">
                   <input
                     value={m.code}
                     onChange={(e) => setSettings((s) => ({
@@ -233,14 +268,14 @@ export default function AdminSettingsPage() {
                     />
                     {isAR ? 'مفعّل' : 'enabled'}
                   </label>
-                  <button type="button" onClick={() => removeShip(m.code)} className="text-red-600 hover:underline text-sm">{isAR ? 'حذف' : 'Remove'}</button>
+                  <button type="button" onClick={() => removeShip(m.code)} className="text-red-600 hover:underline text-sm justify-self-start md:justify-self-auto">{isAR ? 'حذف' : 'Remove'}</button>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="pt-2">
-            <button disabled={saving} type="submit" className="bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">
+            <button disabled={saving} type="submit" className="w-full sm:w-auto bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">
               {saving ? (isAR ? 'جارٍ الحفظ…' : 'Saving…') : (isAR ? 'حفظ الإعدادات' : 'Save Settings')}
             </button>
           </div>

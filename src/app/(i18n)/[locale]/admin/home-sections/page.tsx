@@ -170,7 +170,21 @@ export default function AdminHomeSectionsPage() {
   return (
     <div className="text-gray-900" dir={isAR ? 'rtl' : 'ltr'}>
       <div className={`px-1 py-2 space-y-8 ${isAR ? 'text-right' : ''}`}>
-        <h1 className="text-2xl font-bold">{isAR ? 'لوحة التحكم • أقسام الصفحة الرئيسية' : 'Admin • Home Sections'}</h1>
+        <h1 className="text-xl sm:text-2xl font-bold">
+          {isAR ? (
+            <>
+              <span>لوحة التحكم</span>
+              <span className="hidden sm:inline"> • </span>
+              <span className="sm:ms-1">أقسام الصفحة الرئيسية</span>
+            </>
+          ) : (
+            <>
+              <span>Admin</span>
+              <span className="hidden sm:inline"> • </span>
+              <span className="sm:ms-1">Home Sections</span>
+            </>
+          )}
+        </h1>
 
         <form onSubmit={onCreateOrUpdate} className="grid md:grid-cols-6 gap-4 bg-white p-4 rounded-xl shadow">
           <div className="md:col-span-3">
@@ -195,7 +209,7 @@ export default function AdminHomeSectionsPage() {
             placeholder={isAR ? 'المعرف (slug)' : 'slug'}
             className="input input-bordered w-full p-2 rounded border border-gray-300"
           />
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
             <select
               value={(form.type === 'custom_query' && (form as any)?.filters?.customTypeName) ? 'other' : form.type}
               onChange={(e)=> {
@@ -266,7 +280,7 @@ export default function AdminHomeSectionsPage() {
             className="md:col-span-3 input input-bordered w-full p-2 rounded border border-gray-300"
           />
 
-          <div className="md:col-span-6 flex items-center gap-3">
+          <div className="md:col-span-6 flex flex-wrap items-center gap-2">
             <button disabled={loading} type="submit" className="bg-[#2F3E77] text-white rounded px-4 py-2 hover:brightness-95 disabled:opacity-60">
               {editingId ? (loading ? (isAR ? 'جارٍ الحفظ...' : 'Saving...') : (isAR ? 'تحديث القسم' : 'Update Section')) : (loading ? (isAR ? 'جارٍ الحفظ...' : 'Saving...') : (isAR ? 'إنشاء قسم' : 'Create Section'))}
             </button>
@@ -278,19 +292,21 @@ export default function AdminHomeSectionsPage() {
 
         <div className="grid gap-3">
           {sections.map((s)=> (
-            <div key={s._id} className="bg-white rounded-xl p-4 shadow flex items-center justify-between">
-              <div className="flex items-center gap-3">
+            <div key={s._id} className="bg-white rounded-xl p-3 sm:p-4 shadow border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-start gap-3">
                 <div className="w-8 h-8 rounded bg-blue-600 text-white flex items-center justify-center text-xs font-bold">{(s.type||'')[0]?.toUpperCase()}</div>
                 <div>
-                  <div className="font-semibold">{s.titleEn} <span className="text-gray-400">/ {s.titleAr}</span></div>
-                  <div className="text-xs text-gray-500">/{s.slug} • {(s as any)?.filters?.customTypeName || s.type} • {isAR ? 'الترتيب' : 'order'} {s.order ?? 0} • {s.enabled ? (isAR ? 'مفعّل' : 'enabled') : (isAR ? 'معطّل' : 'disabled')} • {isAR ? 'اللغة' : 'locale'} {s.localeMode}</div>
+                  <div className="font-semibold text-sm sm:text-base">{s.titleEn} <span className="text-gray-400">/ {s.titleAr}</span></div>
+                  <div className="text-xs text-gray-500 break-all">/{s.slug} • {(s as any)?.filters?.customTypeName || s.type} • {isAR ? 'الترتيب' : 'order'} {s.order ?? 0} • {s.enabled ? (isAR ? 'مفعّل' : 'enabled') : (isAR ? 'معطّل' : 'disabled')} • {isAR ? 'اللغة' : 'locale'} {s.localeMode}</div>
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-sm">
-                <button onClick={()=> onChangeOrder(s._id!, -10)} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">▲</button>
-                <button onClick={()=> onChangeOrder(s._id!, +10)} className="px-2 py-1 rounded bg-gray-100 hover:bg-gray-200">▼</button>
-                <button onClick={()=> { setEditingId(s._id!); setForm({ ...s }); }} className="text-blue-700 hover:underline">{isAR ? 'تعديل' : 'Edit'}</button>
-                <button onClick={()=> onDelete(s._id)} className="text-red-600 hover:underline">{isAR ? 'حذف' : 'Delete'}</button>
+              <div className="flex items-center justify-between sm:justify-end gap-2 text-xs sm:text-sm w-full sm:w-auto border-t pt-2 sm:border-0 sm:pt-0">
+                <div className="flex items-center gap-1">
+                  <button onClick={()=> onChangeOrder(s._id!, -10)} className="px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-50" title={isAR ? 'أعلى' : 'Up'}>▲</button>
+                  <button onClick={()=> onChangeOrder(s._id!, +10)} className="px-2 py-1 rounded-full border border-gray-200 hover:bg-gray-50" title={isAR ? 'أسفل' : 'Down'}>▼</button>
+                </div>
+                <button onClick={()=> { setEditingId(s._id!); setForm({ ...s }); }} className="px-3 py-1.5 rounded-full border border-blue-200 text-blue-700 hover:bg-blue-50">{isAR ? 'تعديل' : 'Edit'}</button>
+                <button onClick={()=> onDelete(s._id)} className="px-3 py-1.5 rounded-full border border-rose-200 text-rose-700 hover:bg-rose-50">{isAR ? 'حذف' : 'Delete'}</button>
               </div>
             </div>
           ))}

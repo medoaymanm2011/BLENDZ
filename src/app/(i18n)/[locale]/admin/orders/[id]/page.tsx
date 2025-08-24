@@ -240,11 +240,15 @@ export default function AdminOrderDetailPage() {
 
   return (
     <div className="space-y-6" dir={isAR ? 'rtl' : 'ltr'}>
-      <div className={`flex items-center justify-between ${isAR ? 'text-right' : ''}`}>
-        <h1 className="text-2xl font-bold">{isAR ? 'الطلب' : 'Order'} #{String(order._id).slice(-6)}</h1>
+      <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 ${isAR ? 'text-right' : ''}`}>
+        <h1 className="text-xl sm:text-2xl font-bold">{isAR ? 'الطلب' : 'Order'} #{String(order._id).slice(-6)}</h1>
         <div className="flex items-center gap-2">
-          <button onClick={()=>router.push(`/${locale}/admin/orders`)} className="px-3 py-1.5 rounded border hover:bg-gray-50">{isAR ? 'رجوع' : 'Back'}</button>
-          <button onClick={cancelOrder} disabled={saving || order.status==='cancelled'} className="px-3 py-1.5 rounded border text-red-600 hover:bg-red-50 disabled:opacity-50">{isAR ? 'إلغاء' : 'Cancel'}</button>
+          <button onClick={()=>router.push(`/${locale}/admin/orders`)} className="px-2 py-1 sm:px-3 sm:py-1.5 rounded border hover:bg-gray-50 text-sm">
+            {isAR ? 'رجوع' : 'Back'}
+          </button>
+          <button onClick={cancelOrder} disabled={saving || order.status==='cancelled'} className="px-2 py-1 sm:px-3 sm:py-1.5 rounded border text-red-600 hover:bg-red-50 disabled:opacity-50 text-sm">
+            {isAR ? 'إلغاء' : 'Cancel'}
+          </button>
         </div>
       </div>
 
@@ -254,15 +258,15 @@ export default function AdminOrderDetailPage() {
             <div className="font-semibold mb-3">{isAR ? 'العناصر' : 'Items'}</div>
             <div className="divide-y">
               {order.items?.map((it: any, idx: number) => (
-                <div key={idx} className="py-2 flex items-center justify-between">
+                <div key={idx} className="py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gray-100 rounded" style={{backgroundImage:`url(${it.image||''})`, backgroundSize:'cover', backgroundPosition:'center'}} />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-gray-100 rounded" style={{backgroundImage:`url(${it.image||''})`, backgroundSize:'cover', backgroundPosition:'center'}} />
                     <div>
-                      <div className="font-medium">{it.name}</div>
-                      <div className="text-sm text-gray-600">{isAR ? '×' : 'x'}{it.qty}</div>
+                      <div className="font-medium text-sm sm:text-base">{it.name}</div>
+                      <div className="text-xs sm:text-sm text-gray-600">{isAR ? '×' : 'x'}{it.qty}</div>
                     </div>
                   </div>
-                  <div className="text-sm">{it.price} {order.totals?.currency || 'EGP'}</div>
+                  <div className="text-sm sm:text-base">{it.price} {order.totals?.currency || 'EGP'}</div>
                 </div>
               ))}
             </div>
@@ -381,12 +385,12 @@ export default function AdminOrderDetailPage() {
             <div className="font-semibold mb-2">{isAR ? 'الخط الزمني' : 'Timeline'}</div>
             <div className="space-y-2 text-sm">
               {(order.tracking?.history || []).slice().reverse().map((ev: any, idx: number) => (
-                <div key={idx} className="flex items-start justify-between gap-3">
+                <div key={idx} className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-3">
                   <div>
                     <div className="font-medium">{ev.status}</div>
                     {ev.note && <div className="text-gray-700 whitespace-pre-wrap">{ev.note}</div>}
                   </div>
-                  <div className="text-gray-600 whitespace-nowrap">{new Date(ev.ts).toLocaleString()}</div>
+                  <div className="text-gray-600 whitespace-nowrap text-xs sm:text-sm">{new Date(ev.ts).toLocaleString()}</div>
                 </div>
               ))}
               {(!order.tracking?.history || order.tracking.history.length===0) && <div className="text-gray-600">{isAR ? 'لا توجد أحداث' : 'No events'}</div>}

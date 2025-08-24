@@ -4,7 +4,11 @@ import createNextIntlPlugin from 'next-intl/plugin';
 const withNextIntl = createNextIntlPlugin('./src/i18n/config.ts');
 
 const nextConfig: NextConfig = {
+  output: 'export',
+  trailingSlash: true,
+  distDir: 'out',
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -23,9 +27,7 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'res.cloudinary.com',
       }
-    ],
-    // Avoid server-side fetching of remote images in development to bypass DNS/network issues
-    unoptimized: process.env.NODE_ENV === 'development'
+    ]
   }
 };
 

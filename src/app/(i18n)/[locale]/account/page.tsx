@@ -114,7 +114,7 @@ export default function AccountPage() {
     const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]') as HTMLScriptElement | null;
     const onLoad = () => {
       try {
-        // @ts-ignore
+        // @ts-expect-error: window.google is injected by GIS script at runtime
         const google = window.google;
         if (!google?.accounts?.id) return;
         google.accounts.id.initialize({

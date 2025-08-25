@@ -127,6 +127,10 @@ export default function AccountPage() {
         if (!google?.accounts?.id) return;
         google.accounts.id.initialize({
           client_id: clientId,
+          // Prefer redirect UX for better compatibility on mobile/in-app browsers
+          ux_mode: 'redirect',
+          login_uri: '/api/auth/google/redirect',
+          // Keep callback as a fallback if Google uses popup in some contexts
           callback: (resp: any) => {
             const cred = resp?.credential;
             if (cred) handleGoogleCredential(cred);

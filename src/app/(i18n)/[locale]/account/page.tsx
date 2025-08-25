@@ -92,12 +92,20 @@ export default function AccountPage() {
         showToastCustom({ message: locale === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', variant: 'success' });
         setRedirecting(true);
         setLoading(true);
-        if (me.user.role === 'admin') { router.replace(`/${locale}/admin`); return; }
+        // Use full navigation to ensure auth cookie is applied on mobile browsers
+        if (me.user.role === 'admin') { 
+          try { window.location.replace(`/${locale}/admin`); } catch { router.replace(`/${locale}/admin`); }
+          return; 
+        }
         try {
           const stored = sessionStorage.getItem('post_login_redirect');
-          if (stored) { sessionStorage.removeItem('post_login_redirect'); router.replace(stored); return; }
+          if (stored) { 
+            sessionStorage.removeItem('post_login_redirect'); 
+            try { window.location.replace(stored); } catch { router.replace(stored); }
+            return; 
+          }
         } catch {}
-        router.replace(`/${locale}`);
+        try { window.location.replace(`/${locale}`); } catch { router.replace(`/${locale}`); }
       }
     } catch (e: any) {
       showToastCustom({ message: e?.message || (locale === 'ar' ? 'خطأ في تسجيل الدخول بواسطة Google' : 'Google login error'), variant: 'danger' });
@@ -603,7 +611,9 @@ export default function AccountPage() {
                     <div className="flex items-center justify-center w-full">
                       <div className="relative inline-block">
                         <button
+                          type="button"
                           className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-[#EA4335] text-white font-medium shadow hover:brightness-105 transition-colors"
+                          onClick={() => onGoogleClick('googleHiddenLogin')}
                           aria-label={locale === 'ar' ? 'تسجيل الدخول باستخدام Google' : 'Continue with Google'}
                         >
                           <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 31.9 29.3 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.4 16.1 18.8 12.9 24 12.9c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.2 0 10-2 13.5-5.2l-6.2-5.1C29.2 36.5 26.7 37.1 24 37.1c-5.2 0-9.6-3.4-11.3-8.1l-6.6 5.1C9.1 40.9 16 45 24 45z"/><path fill="#1976D2" d="M45 24c0-1.3-.1-2.6-.4-3.8H24v8h11.3c-.8 2.7-2.6 4.9-5 6.4l6.2 5.1C39 36.2 45 30.7 45 24z"/></svg>
@@ -756,6 +766,7 @@ export default function AccountPage() {
                         <button
                           type="button"
                           className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-[#EA4335] text-white font-medium shadow hover:brightness-105 transition-colors"
+                          onClick={() => onGoogleClick('googleHiddenRegister')}
                           aria-label={locale === 'ar' ? 'التسجيل باستخدام Google' : 'Continue with Google'}
                         >
                           <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 31.9 29.3 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.4 16.1 18.8 12.9 24 12.9c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.2 0 10-2 13.5-5.2l-6.2-5.1C29.2 36.5 26.7 37.1 24 37.1c-5.2 0-9.6-3.4-11.3-8.1l-6.6 5.1C9.1 40.9 16 45 24 45z"/><path fill="#1976D2" d="M45 24c0-1.3-.1-2.6-.4-3.8H24v8h11.3c-.8 2.7-2.6 4.9-5 6.4l6.2 5.1C39 36.2 45 30.7 45 24z"/></svg>

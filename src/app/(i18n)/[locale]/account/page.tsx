@@ -126,18 +126,24 @@ export default function AccountPage() {
         const google = window.google;
         if (!google?.accounts?.id) return;
         const origin = typeof window !== 'undefined' ? window.location.origin : '';
-        google.accounts.id.initialize({
+        const ua = navigator.userAgent || '';
+        const isInApp = /FBAN|FBAV|Instagram|Line\/|Twitter|WhatsApp|TikTok|Snapchat|WeChat|Messenger|wv\)/i.test(ua) ||
+                        (/Mobile/i.test(ua) && /WebView/i.test(ua));
+        const initOptions: any = {
           client_id: clientId,
-          // Prefer redirect UX for better compatibility on mobile/in-app browsers
-          ux_mode: 'redirect',
-          login_uri: origin ? `${origin}/api/auth/google/redirect` : '/api/auth/google/redirect',
-          // Keep callback as a fallback if Google uses popup in some contexts
           callback: (resp: any) => {
             const cred = resp?.credential;
             if (cred) handleGoogleCredential(cred);
           },
           use_fedcm_for_prompt: true,
-        });
+        };
+        if (isInApp) {
+          initOptions.ux_mode = 'redirect';
+          initOptions.login_uri = origin ? `${origin}/api/auth/google/redirect` : '/api/auth/google/redirect';
+        } else {
+          initOptions.ux_mode = 'popup';
+        }
+        google.accounts.id.initialize(initOptions);
         const targetLogin = document.getElementById('googleHiddenLogin');
         if (targetLogin) {
           targetLogin.innerHTML = '';

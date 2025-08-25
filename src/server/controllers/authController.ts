@@ -7,6 +7,7 @@ import { setAuthCookie, clearAuthCookie } from '@/lib/authCookies';
 import { verifyToken } from '@/lib/jwt';
 import { Types } from 'mongoose';
 import { sendVerificationEmail } from '@/lib/email';
+import { OAuth2Client } from 'google-auth-library';
 
 export async function registerHandler(req: NextRequest) {
   await connectToDB();
@@ -124,4 +125,98 @@ export async function resendVerificationHandler(req: NextRequest) {
   const locale2 = headerLocale2 === 'ar' ? 'ar' : 'en';
   try { await sendVerificationEmail(user.email, verificationCode, locale2); } catch (e) { try { console.error('Email send failed (resend):', e); } catch {} }
   return NextResponse.json({ ok: true });
+}
+
+// Google Social Login: verify idToken, upsert user, set auth cookie
+export async function socialLoginHandler(req: NextRequest) {
+  await connectToDB();
+  try {
+    const { idToken } = await req.json();
+    if (!idToken) return NextResponse.json({ error: 'Missing idToken' }, { status: 400 });
+    const clientId = process.env.ClientID;
+    if (!clientId) return NextResponse.json({ error: 'Server not configured for Google login' }, { status: 500 });
+
+    const client = new OAuth2Client(clientId);
+    const ticket = await client.verifyIdToken({ idToken, audience: clientId });
+    const payload = ticket.getPayload();
+    if (!payload) return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+
+    const email = String(payload.email || '').toLowerCase().trim();
+    const emailVerified = !!payload.email_verified;
+    const name = payload.name || email.split('@')[0] || 'User';
+    const sub = payload.sub || email; // unique identifier
+    if (!email) return NextResponse.json({ error: 'Email missing in token' }, { status: 400 });
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      const passwordHash = await bcrypt.hash(String(sub), 10);
+      user = await User.create({ name, email, passwordHash, role: 'user', verified: emailVerified, verificationCode: null });
+    } else if (!user.verified && emailVerified) {
+      user.verified = true;
+      user.verificationCode = null;
+      await user.save();
+    }
+
+    const res = NextResponse.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role } }, { status: 200 });
+    try {
+      setAuthCookie(res, { sub: String(user._id), email: user.email, role: user.role });
+    } catch {
+      return NextResponse.json({ error: { code: 'SESSION_ERROR', message: 'Failed to establish session' } }, { status: 500 });
+    }
+    return res;
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Login failed' }, { status: 400 });
+  }
+}
+
+// Facebook Social Login: verify accessToken, upsert user, set auth cookie
+export async function facebookLoginHandler(req: NextRequest) {
+  await connectToDB();
+  try {
+    const { accessToken } = await req.json();
+    if (!accessToken) return NextResponse.json({ error: 'Missing accessToken' }, { status: 400 });
+    const appId = process.env.FACEBOOK_APP_ID;
+    const appSecret = process.env.FACEBOOK_APP_SECRET;
+    if (!appId || !appSecret) return NextResponse.json({ error: 'Server not configured for Facebook login' }, { status: 500 });
+
+    const appAccess = `${appId}|${appSecret}`;
+    const debugUrl = `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(accessToken)}&access_token=${encodeURIComponent(appAccess)}`;
+    const debugRes = await fetch(debugUrl, { next: { revalidate: 0 } });
+    const debugJson: any = await debugRes.json();
+    if (!debugRes.ok || !debugJson?.data?.is_valid) {
+      return NextResponse.json({ error: 'Invalid Facebook token' }, { status: 401 });
+    }
+
+    const meUrl = `https://graph.facebook.com/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`;
+    const meRes = await fetch(meUrl, { next: { revalidate: 0 } });
+    const me: any = await meRes.json();
+    if (!meRes.ok || !me?.id) {
+      return NextResponse.json({ error: 'Failed to fetch Facebook profile' }, { status: 400 });
+    }
+
+    const rawEmail = String(me.email || '').toLowerCase().trim();
+    const email = rawEmail || `${me.id}@facebook.local`;
+    const name = me.name || (rawEmail ? rawEmail.split('@')[0] : 'Facebook User');
+    const sub = me.id;
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      const passwordHash = await bcrypt.hash(String(sub), 10);
+      user = await User.create({ name, email, passwordHash, role: 'user', verified: !!rawEmail, verificationCode: null });
+    } else if (!user.verified && rawEmail) {
+      user.verified = true;
+      user.verificationCode = null;
+      await user.save();
+    }
+
+    const res = NextResponse.json({ user: { id: user._id, name: user.name, email: user.email, role: user.role } }, { status: 200 });
+    try {
+      setAuthCookie(res, { sub: String(user._id), email: user.email, role: user.role });
+    } catch {
+      return NextResponse.json({ error: { code: 'SESSION_ERROR', message: 'Failed to establish session' } }, { status: 500 });
+    }
+    return res;
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message || 'Facebook login failed' }, { status: 400 });
+  }
 }

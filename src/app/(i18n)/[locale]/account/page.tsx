@@ -18,6 +18,18 @@ export default function AccountPage() {
   const locale = useLocale();
   const router = useRouter();
   const { showToastCustom } = useToast();
+  const hasGoogleClient = Boolean(process.env.NEXT_PUBLIC_ClientID);
+
+  
+  const onGoogleClick = (targetId: string) => {
+    try {
+      const host = document.getElementById(targetId);
+      if (!host) return;
+      const btn = host.querySelector('div[role="button"], button, div');
+      // click the rendered GIS button inside host
+      (btn as HTMLElement)?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    } catch {}
+  };
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
@@ -56,6 +68,97 @@ export default function AccountPage() {
     const c = passwordChecks(pwd);
     return (c.length ? 1 : 0) + (c.upper ? 1 : 0) + (c.lower ? 1 : 0) + (c.number ? 1 : 0) + (c.symbol ? 1 : 0);
   };
+
+  // Handle Google credential and perform social login
+  const handleGoogleCredential = async (idToken: string) => {
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const friendly = data?.error || (locale === 'ar' ? 'تعذر تسجيل الدخول بواسطة Google' : 'Google login failed');
+        showToastCustom({ message: friendly, variant: 'danger' });
+        return;
+      }
+      const me = data;
+      if (me?.user) {
+        try {
+          window.dispatchEvent(new Event('auth_changed'));
+        } catch {}
+        showToastCustom({ message: locale === 'ar' ? 'تم تسجيل الدخول بنجاح' : 'Logged in successfully', variant: 'success' });
+        setRedirecting(true);
+        setLoading(true);
+        if (me.user.role === 'admin') { router.replace(`/${locale}/admin`); return; }
+        try {
+          const stored = sessionStorage.getItem('post_login_redirect');
+          if (stored) { sessionStorage.removeItem('post_login_redirect'); router.replace(stored); return; }
+        } catch {}
+        router.replace(`/${locale}`);
+      }
+    } catch (e: any) {
+      showToastCustom({ message: e?.message || (locale === 'ar' ? 'خطأ في تسجيل الدخول بواسطة Google' : 'Google login error'), variant: 'danger' });
+    }
+  };
+
+  // Load Google Identity Services and render button on visible form
+  useEffect(() => {
+    const clientId = process.env.NEXT_PUBLIC_ClientID as string | undefined;
+    if (!clientId) {
+      try { console.warn('[Google] NEXT_PUBLIC_ClientID is missing. Add it to .env.local and restart.'); } catch {}
+      return;
+    }
+    const existing = document.querySelector('script[src="https://accounts.google.com/gsi/client"]') as HTMLScriptElement | null;
+    const onLoad = () => {
+      try {
+        // @ts-ignore
+        const google = window.google;
+        if (!google?.accounts?.id) return;
+        google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (resp: any) => {
+            const cred = resp?.credential;
+            if (cred) handleGoogleCredential(cred);
+          },
+          use_fedcm_for_prompt: true,
+        });
+        const targetLogin = document.getElementById('googleHiddenLogin');
+        if (targetLogin) {
+          targetLogin.innerHTML = '';
+          google.accounts.id.renderButton(targetLogin, { theme: 'filled_blue', size: 'large', width: 240, shape: 'rectangular' });
+          try { console.debug('[Google] Rendered login button'); } catch {}
+        }
+        const targetRegister = document.getElementById('googleHiddenRegister');
+        if (targetRegister) {
+          targetRegister.innerHTML = '';
+          google.accounts.id.renderButton(targetRegister, { theme: 'filled_blue', size: 'large', width: 240, shape: 'rectangular' });
+          try { console.debug('[Google] Rendered register button'); } catch {}
+        }
+      } catch {}
+    };
+    if (existing) {
+      if ((existing as any)._loaded) onLoad();
+      else existing.addEventListener('load', onLoad, { once: true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    (script as any)._loaded = false;
+    script.addEventListener('load', () => { (script as any)._loaded = true; try { console.debug('[Google] GIS script loaded'); } catch {} onLoad(); }, { once: true });
+    document.head.appendChild(script);
+    return () => {
+      // keep script cached but clear button areas between toggles
+      try {
+        const t1 = document.getElementById('googleSignInDiv'); if (t1) t1.innerHTML = '';
+        const t2 = document.getElementById('googleRegisterDiv'); if (t2) t2.innerHTML = '';
+      } catch {}
+    };
+  }, [isLogin, locale]);
 
   useEffect(() => {
     // Load session from backend
@@ -491,6 +594,33 @@ export default function AccountPage() {
 
                     <button type="submit" className="w-full bg-[#2F3E77] hover:brightness-95 text-white py-3 rounded-md shadow-md transition-colors">{locale === 'ar' ? 'تسجيل الدخول' : 'Log in'}</button>
 
+                    <div className="flex items-center gap-2 my-2">
+                      <div className="h-[1px] bg-gray-200 flex-1" />
+                      <span className="text-xs text-gray-500">{locale === 'ar' ? 'أو' : 'OR'}</span>
+                      <div className="h-[1px] bg-gray-200 flex-1" />
+                    </div>
+
+                    <div className="flex items-center justify-center w-full">
+                      <div className="relative inline-block">
+                        <button
+                          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-[#EA4335] text-white font-medium shadow hover:brightness-105 transition-colors"
+                          aria-label={locale === 'ar' ? 'تسجيل الدخول باستخدام Google' : 'Continue with Google'}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 31.9 29.3 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.4 16.1 18.8 12.9 24 12.9c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.2 0 10-2 13.5-5.2l-6.2-5.1C29.2 36.5 26.7 37.1 24 37.1c-5.2 0-9.6-3.4-11.3-8.1l-6.6 5.1C9.1 40.9 16 45 24 45z"/><path fill="#1976D2" d="M45 24c0-1.3-.1-2.6-.4-3.8H24v8h11.3c-.8 2.7-2.6 4.9-5 6.4l6.2 5.1C39 36.2 45 30.7 45 24z"/></svg>
+                          <span>{locale === 'ar' ? 'Google' : 'Google'}</span>
+                        </button>
+                        {/* Invisible overlay that hosts the official GIS button to capture click */}
+                        <div id="googleHiddenLogin" className="absolute inset-0 opacity-0 z-10" aria-hidden="false"></div>
+                      </div>
+                      {/* Hidden official Google button host */}
+                      {/* <div id="googleHiddenLogin" className="sr-only absolute -m-px h-px w-px overflow-hidden p-0 border-0" aria-hidden="true"></div> */}
+                    </div>
+                    {!hasGoogleClient && (
+                      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded mt-2 text-center">
+                        Google Client ID is missing. Add NEXT_PUBLIC_ClientID in .env.local and restart the dev server.
+                      </div>
+                    )}
+
                     <div className="text-center text-sm text-gray-600">
                       {locale === 'ar' ? 'ليس لديك حساب؟' : "Don't have an account?"}{' '}
                       <button type="button" onClick={()=>setIsLogin(false)} className="text-[#2F3E77] hover:brightness-95 font-semibold">
@@ -615,6 +745,33 @@ export default function AccountPage() {
 
                     <button type="submit" className="w-full bg-[#2F3E77] hover:brightness-95 text-white py-3 rounded-md shadow-md transition-colors">{locale === 'ar' ? 'تسجيل' : 'Register'}</button>
 
+                    <div className="flex items-center gap-2 my-2">
+                      <div className="h-[1px] bg-gray-200 flex-1" />
+                      <span className="text-xs text-gray-500">{locale === 'ar' ? 'أو' : 'OR'}</span>
+                      <div className="h-[1px] bg-gray-200 flex-1" />
+                    </div>
+
+                    <div className="flex items-center justify-center w-full">
+                      <div className="relative inline-block">
+                        <button
+                          type="button"
+                          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-md bg-[#EA4335] text-white font-medium shadow hover:brightness-105 transition-colors"
+                          aria-label={locale === 'ar' ? 'التسجيل باستخدام Google' : 'Continue with Google'}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 31.9 29.3 35 24 35c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.4 16.1 18.8 12.9 24 12.9c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 5.1 29.6 3 24 3 16 3 9.2 7.1 6.3 14.7z"/><path fill="#4CAF50" d="M24 45c5.2 0 10-2 13.5-5.2l-6.2-5.1C29.2 36.5 26.7 37.1 24 37.1c-5.2 0-9.6-3.4-11.3-8.1l-6.6 5.1C9.1 40.9 16 45 24 45z"/><path fill="#1976D2" d="M45 24c0-1.3-.1-2.6-.4-3.8H24v8h11.3c-.8 2.7-2.6 4.9-5 6.4l6.2 5.1C39 36.2 45 30.7 45 24z"/></svg>
+                          <span>{locale === 'ar' ? 'Google' : 'Google'}</span>
+                        </button>
+                        {/* Invisible overlay that hosts the official GIS button to capture click */}
+                        <div id="googleHiddenRegister" className="absolute inset-0 opacity-0 z-10" aria-hidden="false"></div>
+                      </div>
+                      {/* Hidden official Google button host */}
+                      {/* <div id="googleHiddenRegister" className="sr-only absolute -m-px h-px w-px overflow-hidden p-0 border-0" aria-hidden="true"></div> */}
+                    </div>
+                    {!hasGoogleClient && (
+                      <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-2 rounded mt-2 text-center">
+                        Google Client ID is missing. Add NEXT_PUBLIC_ClientID in .env.local and restart the dev server.
+                      </div>
+                    )}
 
                     <div className="text-center text-sm text-gray-600">
                       {locale === 'ar' ? 'لديك حساب بالفعل؟' : 'Already registered?'}{' '}

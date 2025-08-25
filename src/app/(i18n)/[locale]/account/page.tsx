@@ -125,11 +125,12 @@ export default function AccountPage() {
         // @ts-expect-error: window.google is injected by GIS script at runtime
         const google = window.google;
         if (!google?.accounts?.id) return;
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
         google.accounts.id.initialize({
           client_id: clientId,
           // Prefer redirect UX for better compatibility on mobile/in-app browsers
           ux_mode: 'redirect',
-          login_uri: '/api/auth/google/redirect',
+          login_uri: origin ? `${origin}/api/auth/google/redirect` : '/api/auth/google/redirect',
           // Keep callback as a fallback if Google uses popup in some contexts
           callback: (resp: any) => {
             const cred = resp?.credential;

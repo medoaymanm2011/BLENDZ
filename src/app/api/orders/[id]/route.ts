@@ -3,6 +3,7 @@ import { connectToDB } from '@/lib/db';
 import { verifyToken, JwtPayload } from '@/lib/jwt';
 import { Order, type OrderStatus } from '@/models/Order';
 import { Product } from '@/models/Product';
+import { LowStockAlert } from '@/models/LowStockAlert';
 
 export const runtime = 'nodejs';
 
@@ -103,6 +104,15 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     for (const it of order.items || []) {
       await Product.updateOne({ _id: it.productId }, { $inc: { stock: it.qty } });
     }
+
+    // Cleanup low-stock alerts for replenished products
+    try {
+      const THRESH = Number(process.env.LOW_STOCK_THRESHOLD ?? 2);
+      const ids = Array.from(new Set((order.items || []).map((i: any) => String(i.productId))));
+      const prods = ids.length ? await Product.find({ _id: { $in: ids } }).select('stock').lean<any>() : [];
+      const okIds = prods.filter((p: any) => Number(p?.stock ?? 0) > THRESH).map((p: any) => String(p._id));
+      if (okIds.length) await LowStockAlert.deleteMany({ productId: { $in: okIds } });
+    } catch {}
 
     order.status = 'cancelled';
     order.payment.status = 'cancelled';

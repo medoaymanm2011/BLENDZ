@@ -25,6 +25,7 @@ type StoredOrder = {
   currency: string;
   paymentStatus?: string;
   paymentRawMethod?: string;
+  paymentChannel?: string;
   receiptUrl?: string | null;
 };
 
@@ -37,6 +38,12 @@ export default function OrderDetailsPage() {
   const [showReturnModal, setShowReturnModal] = useState(false);
   const [retReason, setRetReason] = useState<string>('');
   const [retNotes, setRetNotes] = useState<string>('');
+  // Processing refund request modal (InstaPay paid orders)
+  const [showProcRefundModal, setShowProcRefundModal] = useState(false);
+  const [rfName, setRfName] = useState('');
+  const [rfPhone, setRfPhone] = useState('');
+  const [rfAddress, setRfAddress] = useState('');
+  const [rfReason, setRfReason] = useState('');
   const REASON_OPTIONS = useMemo(() => [
     locale === 'ar' ? 'مقاس غير مناسب' : 'Wrong size',
     locale === 'ar' ? 'عنصر تالف' : 'Damaged item',
@@ -86,6 +93,7 @@ export default function OrderDetailsPage() {
           currency: o.totals?.currency ?? localCopy?.currency ?? (locale === 'ar' ? 'ج.م' : 'EGP'),
           paymentStatus: o.payment?.status || 'pending',
           paymentRawMethod: o.payment?.method || '',
+          paymentChannel: o.payment?.channel || '',
           receiptUrl: o.payment?.receiptUrl || null,
         };
         if (mounted) setOrder(mapped);
@@ -144,6 +152,15 @@ export default function OrderDetailsPage() {
     const st = order?.status ? String(order.status).toLowerCase() : 'pending';
     return st !== 'shipped' && st !== 'delivered' && st !== 'cancelled';
   }, [order?.status]);
+
+  // Allow refund request only during processing when InstaPay paid
+  const canRefundProcessing = useMemo(() => {
+    if (!order) return false;
+    const st = String(order.status || '').toLowerCase();
+    const pstat = String(order.paymentStatus || '').toLowerCase();
+    const channel = String(order.paymentChannel || '').toLowerCase();
+    return st === 'processing' && pstat === 'paid' && channel === 'instapay';
+  }, [order]);
 
   // Return eligibility: allow only if delivered and within 30 days, and not already cancelled/returned
   const returnEligible = useMemo(() => {
@@ -366,6 +383,76 @@ export default function OrderDetailsPage() {
               ) : (
                 <div className="pt-2 text-xs text-gray-600">{locale === 'ar' ? 'لم يتم رفع إيصال حتى الآن.' : 'No receipt uploaded yet.'}</div>
               )}
+
+      {/* Processing Refund Request Modal */}
+      {showProcRefundModal && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowProcRefundModal(false)} />
+          <div className="relative z-10 flex items-start justify-center p-4 md:p-8">
+            <div className="w-full max-w-lg bg-white rounded-xl shadow-xl">
+              <div className="px-6 py-4 border-b flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-[#2F3E77]">{locale === 'ar' ? 'طلب استرجاع المبلغ (أثناء المعالجة)' : 'Request Refund (Processing stage)'}</h3>
+                  <p className="text-sm text-gray-500">{locale === 'ar' ? 'يرجى إدخال الاسم ورقم الهاتف والعنوان كما على التحويل.' : 'Please enter name, phone and address as per the transfer.'}</p>
+                </div>
+                <button onClick={() => setShowProcRefundModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                <div>
+                  <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'الاسم' : 'Full Name'}</label>
+                  <input value={rfName} onChange={(e)=>setRfName(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-[#2F3E77]" />
+                </div>
+                <div>
+                  <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'رقم الهاتف' : 'Phone'}</label>
+                  <input value={rfPhone} onChange={(e)=>setRfPhone(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-[#2F3E77]" />
+                </div>
+                <div>
+                  <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'العنوان' : 'Address'}</label>
+                  <textarea value={rfAddress} onChange={(e)=>setRfAddress(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border rounded-lg text-[#2F3E77]" />
+                </div>
+                <div>
+                  <label className="text-sm text-[#2F3E77]">{locale === 'ar' ? 'سبب الاسترجاع (اختياري)' : 'Reason (optional)'}</label>
+                  <input value={rfReason} onChange={(e)=>setRfReason(e.target.value)} className="w-full mt-1 px-3 py-2 border rounded-lg text-[#2F3E77]" />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t flex items-center justify-end gap-3">
+                <button onClick={() => setShowProcRefundModal(false)} className="px-4 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">{locale === 'ar' ? 'إلغاء' : 'Cancel'}</button>
+                <button
+                  onClick={async () => {
+                    if (!order) return;
+                    const name = rfName.trim();
+                    const phone = rfPhone.trim();
+                    const address = rfAddress.trim();
+                    if (!name || !phone || !address) { alert(locale === 'ar' ? 'يرجى إدخال الاسم والهاتف والعنوان' : 'Please fill name, phone, and address'); return; }
+                    try {
+                      const res = await fetch(`/api/orders/${order.id}/refund-request`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'include',
+                        body: JSON.stringify({ name, phone, address, reason: rfReason.trim() })
+                      });
+                      if (res.ok) {
+                        setShowProcRefundModal(false);
+                        setRfName(''); setRfPhone(''); setRfAddress(''); setRfReason('');
+                        alert(locale === 'ar' ? 'تم إرسال طلب الاسترجاع إلى الإدارة.' : 'Refund request has been sent to admin.');
+                      } else {
+                        const data = await res.json().catch(() => ({}));
+                        alert(data?.error || (locale === 'ar' ? 'تعذر إرسال الطلب' : 'Failed to submit request'));
+                      }
+                    } catch {
+                      alert(locale === 'ar' ? 'تعذر إرسال الطلب' : 'Failed to submit request');
+                    }
+                  }}
+                  className={`px-4 py-2 rounded-lg ${canRefundProcessing ? 'bg-purple-600 text-white hover:bg-purple-700' : 'bg-gray-300 text-white cursor-not-allowed'}`}
+                  disabled={!canRefundProcessing}
+                >
+                  {locale === 'ar' ? 'إرسال الطلب' : 'Submit Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
               {order?.receiptUrl ? (
                 <div className="mt-1 text-[11px] text-gray-600 break-all">
                   {locale === 'ar' ? 'رابط الإيصال:' : 'Receipt URL:'} {order.receiptUrl}
@@ -454,6 +541,13 @@ export default function OrderDetailsPage() {
               <div className="text-center mt-4">
                 <button onClick={handleCancel} disabled={!cancellable} className={`px-4 py-2 rounded text-white ${cancellable ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-300 cursor-not-allowed'}`}>
                   {cancellable ? (locale === 'ar' ? 'إلغاء الطلب' : 'Cancel Order') : (locale === 'ar' ? 'لا يمكن الإلغاء' : 'Cannot Cancel')}
+                </button>
+                <button
+                  onClick={() => setShowProcRefundModal(true)}
+                  disabled={!canRefundProcessing}
+                  className={`ml-3 px-4 py-2 rounded text-white ${canRefundProcessing ? 'bg-purple-600 hover:bg-purple-700' : 'bg-gray-300 cursor-not-allowed'}`}
+                >
+                  {canRefundProcessing ? (locale === 'ar' ? 'طلب استرجاع (InstaPay)' : 'Request Refund (InstaPay)') : (locale === 'ar' ? 'غير مؤهل للاسترجاع' : 'Not Eligible for Refund')}
                 </button>
               </div>
             </div>

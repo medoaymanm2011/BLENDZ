@@ -115,19 +115,7 @@ export default function ProductPage() {
     return () => { cancelled = true; };
   }, [dbProduct]);
 
-  // Notify admin if stock is low or zero (ensure hook order is stable by placing before any conditional returns)
-  useEffect(() => {
-    if (!dbProduct) return;
-    const s = dbProduct.stock ?? 0;
-    if (s <= 2) {
-      fetch('/api/admin/low-stock', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: dbProduct._id, slug, stock: s }),
-        cache: 'no-store',
-      }).catch(() => {});
-    }
-  }, [dbProduct?._id, dbProduct?.stock, slug]);
+  // Client no longer triggers low-stock alerts; server does it after stock changes.
 
   // While loading DB and no mock product, show a lightweight loading UI
   if (loadingDb && !dbProduct) {

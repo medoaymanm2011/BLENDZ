@@ -4,6 +4,7 @@ import { connectToDB } from '@/lib/db';
 import { verifyToken, JwtPayload } from '@/lib/jwt';
 import { Order, type IOrder, type OrderStatus } from '@/models/Order';
 import { Product } from '@/models/Product';
+import { LowStockAlert } from '@/models/LowStockAlert';
 
 function getAuth(req: NextRequest): JwtPayload | null {
   const token = req.cookies.get('auth_token')?.value;
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
     const order: IOrder = {
       userId: auth?.sub || null,
       customerEmail: auth?.email || body?.customerEmail || null,
+      adminSeen: false,
       shippingInfo,
       items: items.map((it: any) => ({
         productId: String(it.productId),
@@ -99,6 +101,22 @@ export async function POST(req: NextRequest) {
     // Decrement stock
     for (const it of order.items) {
       await Product.updateOne({ _id: it.productId }, { $inc: { stock: -it.qty } });
+    }
+
+    // Server-side low-stock alert after decrement
+    try {
+      const THRESH = Number(process.env.LOW_STOCK_THRESHOLD ?? 2);
+      // Check each unique product once
+      const ids = Array.from(new Set(order.items.map((i: any) => String(i.productId))));
+      for (const pid of ids) {
+        const p2: any = await Product.findById(pid).lean();
+        const s = Number(p2?.stock ?? 0);
+        if (isFinite(s) && s <= THRESH) {
+          await LowStockAlert.create({ productId: String(pid), slug: p2?.slug, stock: s, at: new Date() });
+        }
+      }
+    } catch {
+      // non-fatal
     }
 
     const saved = await Order.create(order);

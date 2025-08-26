@@ -21,6 +21,8 @@ export interface IOrder {
   _id?: string;
   userId?: string | null;
   customerEmail?: string | null;
+  // Whether an admin has seen this order in the dashboard
+  adminSeen?: boolean;
   shippingInfo: {
     name: string;
     phone: string;
@@ -70,6 +72,7 @@ const TrackingEventSchema = new Schema<ITrackingEvent>({
 const OrderSchema = new Schema<IOrder>({
   userId: { type: String, default: null },
   customerEmail: { type: String, default: null },
+  adminSeen: { type: Boolean, default: false },
   shippingInfo: {
     name: { type: String, required: true },
     phone: { type: String, required: true },

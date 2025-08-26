@@ -33,6 +33,8 @@ export default function AdminOrdersPage() {
       const res = await fetch(url, { credentials: 'include', cache: 'no-store' });
       const data = await res.json();
       setOrders(data.orders || []);
+      // Mark orders as seen for admin once list is viewed
+      try { await fetch('/api/orders/mark-seen', { method: 'POST', credentials: 'include' }); } catch {}
     } catch (e) {
       console.error(e);
       setOrders([]);

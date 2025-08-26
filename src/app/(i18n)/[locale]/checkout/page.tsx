@@ -3,6 +3,7 @@
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import CloudinaryUploader from '@/components/CloudinaryUploader';
+import Image from 'next/image';
 import { useMemo, useState, useEffect } from 'react';
 import { CreditCard, Truck, Home, Phone, Mail, MapPin, ClipboardList, Tag, CheckCircle2 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
@@ -72,6 +73,9 @@ export default function CheckoutPage() {
   const INSTAPAY_HANDLE = (process.env.NEXT_PUBLIC_INSTAPAY_HANDLE as string) || '';
   const BANK_ACCOUNT = (process.env.NEXT_PUBLIC_BANK_ACCOUNT as string) || '';
   const WHATSAPP = (process.env.NEXT_PUBLIC_WHATSAPP as string) || '';
+
+  // Use public Instapay image from /public/images.png
+
 
   // Lock body scroll when modal is open
   useEffect(() => {
@@ -288,9 +292,12 @@ export default function CheckoutPage() {
                   <input type="radio" checked={paymentMethod==='cod'} onChange={()=>setPaymentMethod('cod')} />
                   <span className="flex items-center gap-2 text-[#2F3E77]">{locale === 'ar' ? 'الدفع عند الاستلام' : 'Cash on Delivery'}</span>
                 </label>
-                <label className={`flex items-center gap-3 p-3 rounded-lg border ${paymentMethod==='transfer' ? 'border-[#2F3E77]' : 'border-gray-200'}`}>
+                <label className={`flex items-center gap-0 p-0 rounded-lg border ${paymentMethod==='transfer' ? 'border-[#2F3E77]' : 'border-gray-200'}`}>
                   <input type="radio" checked={paymentMethod==='transfer'} onChange={()=>setPaymentMethod('transfer')} />
-                  <span className="flex items-center gap-2 text-[#2F3E77]"><CreditCard className="w-4 h-4" /> {locale === 'ar' ? 'تحويل بنكي / إنستا باي' : 'Bank Transfer / Instapay'}</span>
+                  <span className="flex items-center gap-0">
+                    <Image src="/images.png" alt="Instapay" width={110} height={35} className="object-contain h-auto" priority />
+                    <span className="sr-only">{locale === 'ar' ? 'تحويل بنكي / إنستا باي' : 'Bank Transfer / Instapay'}</span>
+                  </span>
                 </label>
 
                 {paymentMethod === 'transfer' && (
@@ -300,6 +307,11 @@ export default function CheckoutPage() {
                       <li>
                         {locale === 'ar' ? 'من فضلك حوِّل مبلغ الطلب عبر إنستا باي أو التحويل البنكي:' : 'Please transfer the order amount via Instapay or bank transfer:'}
                         <span className="ms-1 font-semibold text-gray-800">01018551242</span>
+                      </li>
+                      {/* Show small Instapay mark inline */}
+                      <li className="flex items-center gap-2">
+                        <span className="text-gray-700">{locale === 'ar' ? 'إنستا باي متاح' : 'Instapay available'}</span>
+                        <span className="inline-block align-middle"><Image src="/images.png" alt="Instapay" width={140} height={50} className="object-contain h-auto" /></span>
                       </li>
                       {INSTAPAY_HANDLE ? (
                         <li>{locale === 'ar' ? `إنستا باي: ${INSTAPAY_HANDLE}` : `Instapay: ${INSTAPAY_HANDLE}`}</li>
